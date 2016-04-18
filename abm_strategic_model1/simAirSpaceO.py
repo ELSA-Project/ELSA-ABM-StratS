@@ -703,20 +703,48 @@ class Network_Manager:
                     fp.accepted = False
                 f.accepted = False
 
-
 class FlightPlan:
     """
     Class FlightPlan. 
     =============
     Keeps in memory its path, time of departure, cost and id of AC.
+
+    Notes
+    -----
+    Changed in 2.6.4: adapted from Model 2
+
+    (From Model 2)
+    Changed in 2.8: added p_nav.
+    Changed in 2.9.6: added shift_time method.
+    
     """
-    def __init__(self,path,time,cost,ac_id):
-        self.p=path
-        self.t=time
-        self.cost=cost
-        self.ac_id=ac_id
-        self.accepted=True
-        self.bottleneck=-1
+    
+    def __init__(self, path, time, cost, ac_id):
+        """
+        Parameters
+        ----------
+        path : list of sectors
+        time : float
+            time of departure in minutes.
+        cost : float
+            Cost of the nav-path given by the utility function of the company.
+        ac_id : int
+            Id of the Air Company.
+
+        """
+
+        self.p = path # path in sectors
+        self.t = time # of departure
+        self.cost = cost # cost given the utility function
+        self.ac_id = ac_id # id of the air company
+        self.accepted = True # if the flight plan has been accepted by the NM.
+        self.bottleneck = -1 # for post-processing.
+
+    def shift_time(self, shift):
+        """
+        Shift the time of departure by shift (in minutes).
+        """
+        self.t += shift
 
 class Flight:
     """
@@ -724,24 +752,158 @@ class Flight:
     =============
     Keeps in memory its id, source, destination, prefered time of departure and id of AC.
     Thanks to AirCompany, keeps also in memory its flight plans (self.FPs).
+
+    Notes
+    -----
+    Changed in 2.6.4: adapted from model 2.
+
+    (From Model 2)
+    Changed in 2.9.6: Compute FPs added (coming from AirCompany object).
+    New in 2.9.6: method shift_desired_time.
+    
     """
-    def __init__(self,Id,source,destination,pref_time,ac_id,par): # Id is relative to the AC
-        self.id=Id
-        self.source=source
-        self.destination=destination
-        self.pref_time=pref_time
-        self.ac_id=ac_id 
-        self.par=par
+    
+    def __init__(self, Id, source, destination, pref_time, ac_id, par, Nfp):
+        """
+        Parameters
+        ----------
+        Id : int
+            Identifier of the flight, relative to the AirCompany
+        source : int or string
+            label of origin node
+        destination : int or string
+            label of destination node.
+        pref_time : float
+            Preferred time of departure, in minutes (from time 0, beginning of the day)
+        ac_id : int
+            Unique Id of the AirCompany.
+        par : tuple (float, float, float)
+            behavioral parameter of the AirCompany for utility function.
+        Nfp : int
+            Maximum number of flights plans that the AirCompany is going to submit 
+            for this flight. 
+
+        Notes
+        -----
+        Changed in 2.9.6: added Nfp.
+
+        """
+        self.id = Id
+        self.source = source
+        self.destination = destination
+        self.pref_time = pref_time
+        self.ac_id = ac_id 
+        self.par = par
+        self.Nfp = Nfp
+
+    def compute_flightplans(self, tau, G): 
+        """
+        Compute the flight plans for a given flight, based on Nfp and the best paths,
+         and the utility function.
+        
+        Parameters
+        ----------
+        tau : float
+            The different flight plans of the flight will be shifted by this amount (in minutes).
+        G : Net object
+            Used to compute cost of paths. Not modified.
+
+        Raises
+        ------
+        Exception
+            If some pairs in the network to not have enough shortest paths
+        Exception
+            If the list of flight plans in output is smaller than self.Nfp
+
+        Notes
+        -----
+        New in 2.6.4: adapted from Model 2
+
+        (From Model 2)
+        Changed in 2.2: tau introduced.
+        Changed in 2.8: paths made of navpoints and then converted.
+        Changed in 2.9: ai and aj are navpoints, not sectors.
+        Changed in 2.9.6: use the convert_path method of the Net object.
+        New in 2.9.6: comes from AirCompany object.
+        Changed in 2.9.7: ai and aj are source and destination.
+        Changed in 2.9.9: resolved a serious bug of references on paths.
+        
+        """
+
+        ai, aj = self.source, self.destination
+        t0sp = self.pref_time
+
+        # Check that all origin-destination pairs in the network
+        # have a number of shortest paths exactly equal to the number 
+        # of flight plans to be submitted.
+        try:
+            for k, v in G.short.items():
+                assert len(v)==G.Nfp
+        except:
+            raise Exception("OD Pair", k, "have", len(v), "shortest paths whereas", G.Nfp, "were required.")
+
+        # For each shortest path, compute the path in sectors and the total weight of the nav-path
+        SP = [(p, G.weight_path(p)) for p in G.short[(ai,aj)]]
+
+        # Compute the cost of the worst path (with desired time).
+        uworst = utility(self.par, SP[0][-1], t0sp, SP[-1][-1], t0sp)
+                
+        # Compute the cost of all paths which have a cost smaller than uworst 
+        u = [[(cp, t0sp + i*tau, utility(self.par, SP[0][-1], t0sp, c, t0sp + i*tau),p) for p,cp,c in SP] for i in range(self.Nfp)\
+            if utility(self.par,SP[0][-1], t0sp, SP[0][-1],t0sp + i*tau)<=uworst]
+
+        # Select the Nfp flight plans less costly, ordered by increasing cost.
+        fp = [FlightPlan(a[0][:],a[1],a[2],self.id,a[3][:]) for a in sorted([item for sublist in u for item in sublist], key=lambda a: a[2])[:self.Nfp]]
+
+        if len(fp)!=self.Nfp:
+            raise Exception('Problem: there are', len(fp), 'flights plans whereas there should be', self.Nfp)
+    
+        if not G.weighted:
+            # Shuffle the flight plans with equal utility function
+            uniq_util = np.unique([item.cost for item in fp])
+            sfp = []
+            for i in uniq_util:
+                v = [item for item in fp if item.cost==i]
+                shuffle(v)
+                sfp = sfp+v
+            fp = sfp
+        
+        self.FPs = fp
         
     def make_flags(self):
+        """
+        Used for post-processing.
+        Used to remember the flight plans which were overloading the network, 
+        as well as the first sector to be overloaded on the trajectories.
+        """
         try:
-            self.flag_first=[fp.accepted for fp in self.FPs].index(True)
-        except:
-            self.flag_first=len(self.FPs)
+            self.flag_first = [fp.accepted for fp in self.FPs].index(True)
+        except ValueError:
+            self.flag_first = len(self.FPs)
             
-        self.overloadedFPs=[self.FPs[n].p for n in range(0,self.flag_first)]
-        self.bottlenecks=[fp.bottleneck for fp in self.FPs if fp.bottleneck!=-1]
+        self.overloadedFPs = [self.FPs[n].p for n in range(0, self.flag_first)]
+        self.bottlenecks = [fp.bottleneck for fp in self.FPs if fp.bottleneck!=-1]
+       
+    def shift_desired_time(self, shift):
+        """
+        Shift the desired time of all flight plans of the flight.
+
+        Parameters
+        ----------
+        shift : float
+            Amount of time in minutes.
         
+        Notes
+        -----
+        New in 2.6.4: taken from Model 2 (unchanged).
+
+        """
+        
+        shift = int(shift)
+        self.pref_time += shift
+        for fp in self.FPs:
+            fp.shift_time(shift)
+
     def __repr__(self):
         return 'Flight number ' + str(self.id) + ' from AC number ' + str(self.ac_id) +\
             ' from ' + str(self.source) + ' to ' + str(self.destination)
@@ -752,69 +914,87 @@ class AirCompany:
     ================
     Keeps in memory the underliying network and several parameters, in particular the 
     coefficients for the utility function and the pairs of airports used.
+
+    Notes
+    -----
+    Only slightly modified by Model 2. Removed a couple of unused methods.
+
     """
+    
     def __init__(self, Id, Nfp, na, pairs, par):
-        self.Nfp=Nfp
-        self.par=par
-        self.pairs=pairs
-        #self.G=G
-        self.na=na
-        self.id=Id
+        """
+        Initialize the AirCompany.
+
+        Parameters
+        ----------
+        Id: integer
+            unique identifier of the company.
+        Nfp : integer
+            Number of flights plans that flights will submit
+        na: integer
+            Number of flights per destination-origin operated by the Air company.
+            Right now the Model supports only na=1
+        pairs : list of tuple with origin-destination
+            departure/arrivale point will be drawn from them if not specified in fill_FPs
+        par : tuple (float, float, float)
+            Parameters for the utility function
+
+        """
+
+        try:
+            assert na==1
+        except AssertionError:
+            raise Exception("na!=1 is not supported by the model.")
+        self.Nfp = Nfp
+        self.par = par
+        self.pairs = pairs
+        self.na = na
+        self.id = Id
         
     def fill_FPs(self,t0spV, tau, G):
         """
-        Fills na flight with Nfp flight plans each, between airports given by pairs.
+        Fill na flights with Nfp flight plans each, between airports given by pairs.
+
+        Parameters
+        ----------
+        t0spV : iterable with floats
+            Desired times of departure for each origin-destination pair.
+        tau : float
+            Amount of time (in seconds) used to shift the flights plans
+        G : Net Object
+            (Sector) Network on which on which the flights will be allocated. 
+            Needs to have an attribute G_nav which is the network of navpoints.
+        pairs : list of tuples (int, int), optional
+            If given, it is used as the list origin destination for the flights. 
+            Otherwise self.pairs is used.
+
+        Notes
+        -----
+        Changed in 2.6.4: taken from Model 2 (unchanged)
+
+        New in 2.9.5: can specify a pair of airports.
+        Changed in 2.9.6: the flight computes the flight plans itself.
+
         """
+
         try:
             assigned=sample(self.pairs,self.na)
         except ValueError:
             print "self.pairs,self.na", self.pairs,self.na
             raise
             
-        self.flights=[]
-        #self.FPs=[]
-        i=0
-        #print t0spV
-        for (ai,aj) in assigned:
-            self.flights.append(Flight(i,ai,aj,t0spV[i],self.id,self.par))
-            #print t0spV
-            self.flights[-1].FPs=self.add_flightplans(ai,aj,t0spV[i],tau, G)
-            i+=1
+        if pairs==[]:
+            assigned_airports = sample(self.pairs, self.na) 
+        else:
+            assigned_airports = pairs
 
-    def add_flightplans(self,ai,aj,t0sp,tau, G): 
-        """
-        Add flight plans to a given flight, based on Nfp and the best paths.
-        Changed in 2.2: tau introduced.
-        """
-        shortestPaths=G.short[(ai,aj)]
-        uworst=utility(self.par,G.weight_path(shortestPaths[0]),t0sp,G.weight_path(shortestPaths[-1]),t0sp)
-      
-        u=[[(p,t0sp + i*tau,utility(self.par,G.weight_path(shortestPaths[0]),t0sp,G.weight_path(p),t0sp + i*tau)) for p in shortestPaths] for i in range(self.Nfp)\
-            if utility(self.par,G.weight_path(shortestPaths[0]),t0sp,G.weight_path(shortestPaths[0]),t0sp + i*tau)<=uworst]
-        fp=[FlightPlan(a[0],a[1],a[2],self.id) for a in sorted([item for sublist in u for item in sublist], key=lambda a: a[2])[:self.Nfp]]
+        self.flights = []
+        i = 0
+        for (ai,aj) in assigned_airports:
+            self.flights.append(Flight(i, ai, aj, t0spV[i], self.id, self.par, self.Nfp))
+            self.flights[-1].compute_flightplans(tau, G)
+            i += 1
 
-        if not G.weighted:
-            # ------------- shuffling of the flight plans with equal utility function ------------ #
-            uniq_util=np.unique([item.cost for item in fp])
-            sfp=[]
-            for i in uniq_util:
-                v=[item for item in fp if item.cost==i]
-                shuffle(v)
-                sfp=sfp+v
-            fp=sfp
-        #self.FPs.append(fp)
-
-        return fp
-        
-    def add_dummy_flightplans(self,ai,aj,t0sp): 
-        """
-        New in 2.5: Add dummy flight plans to a given flight. Used if there is no route between source and destination airports.
-        """
-        
-        fp=[FlightPlan([],t0sp,10**6,self.id) for i in range(self.Nfp)]
-        
-        return fp
-        
     def __repr__(self):
         return 'AC with para ' + str(self.par)
         
