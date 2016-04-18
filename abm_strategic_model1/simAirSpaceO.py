@@ -27,6 +27,683 @@ from libs.YenKSP.algorithms import ksp_yen
 
 version='2.6.4'
 
+class Network_Manager:
+    """
+    Class Network_Manager 
+    =====================
+    The network manager receives flight plans from air companies and tries to
+    fill the best ones on the network, by increasing order of cost. If the 
+    flight plan does not overreach the capacity of any sector, it is 
+    allocated to the network and the sector loads are updated. 
+    The network manager can also inform the air companies if a shock occurs on
+    the network, i.e if some sectors are shut. It asks for a new bunch of 
+    flights plans from the airlines impacted.
+
+    Notes
+    -----
+    New in 2.6.4: taken and adapted from Model 2
+
+    (From Model 2)
+    New in 2.9.2: gather methods coming from class Net (and Simulation) to make a proper agent.
+
+    """
+    
+    def __init__(self, old_style=False):
+        """
+
+        Parameters
+        ----------
+        old_style: booelan
+            'Old style' means that we detect the peaks in the loads (we have the full 
+            profile of the load with time, and we detect if the maximum is smaller than the capacity)
+            The 'new style computes' just the number of flights which cross the sector during a hour, 
+            and then detect if this number is smaller than the capacity.
+
+        Notes
+        -----
+        Not changed w.r.t Model 2
+        
+        """
+        
+        self.old_style = old_style 
+        if not old_style:
+            self.overload_sector = self.overload_sector_hours
+            self.allocate = self.allocate_hours
+            self.deallocate = self.deallocate_hours
+            self.overload_airport = self.overload_airport_hours
+        else:
+            self.overload_sector = self.overload_sector_peaks
+            self.allocate = self.allocate_peaks
+            self.deallocate = self.deallocate_peaks
+            self.overload_airport = self.overload_airport_peaks
+
+    def initialize_load(self, G, length_day=24):
+        """
+        Initialize loads for network G. If the NM is new style, it creates for each node a 
+        list of length length_day which represents loads. Load is increased by one when a 
+        flights crosses the airspace in the corresponding hour. Note that there is no explicit
+        dates. If the NM is old style, the load is represented by a list of the 2-lists. The
+        is a float representing the time at which the load changes, the second element is the
+        load of the sector starting from the first element to the first element of the next 
+        2-list.
+
+        The load of normal sectors and airport sectors are tracked separately.
+
+        Examples:
+        ---------
+        This sequence:
+        G.node[n]['load_old'] = [[0, 0], [10., 1], [10.5, 2], [15.5, 1], [20., 0], [10**6,0]]
+        Means that there is no flight between 0. and 10., one flight between 10. and 10.5, 
+        two between 10.5 and 15.5, one again between 15.5 and 20. and no flight afterwards.
+
+        Parameters
+        ----------
+        G : Net object
+            or networkx
+        length_day : int
+            Number of hours tracked by the Network Manager.
+
+        Notes
+        -----
+        Unchanged w.r.t Model 2.
+
+        Changed in 2.2: keeps in memory only the intervals.
+        Changed in 2.5: t_max is set to 10**6.
+        Changed in 2.7: load of airports added.
+        Changed in 2.9: no more load of airports. Load is an array giving the load for each hour.
+        Changed in 2.9.3: airports again :).
+
+        """
+
+        if not self.old_style:
+            for n in G.nodes():
+                G.node[n]['load']=[0 for i in range(length_day)]
+            for a in G.airports:
+                G.node[a]['load_airport']=[0 for i in range(length_day)]
+        else:
+            for n in G.nodes():
+                G.node[n]['load_old']=[[0,0],[10**6,0]] 
+            for a in G.airports:
+                G.node[a]['load_old_airport']=[[0,0],[10**6,0]] 
+
+    def build_queue(self, ACs):
+        """
+        Add all the flights of all ACs to a queue, in random order.
+
+        Parameters
+        ----------
+        ACs : a list of AirCompany objects 
+            The AirCompanys must have their flights and flight plans computed. 
+
+        Returns
+        -------
+        queue : a list of objects flights
+            This is the priority list for the allocation of flights.
+
+        Notes
+        -----
+        Unchanged w.r.t Model 2
+
+        """
+
+        queue=[]
+        for ac in ACs.values():
+            for f in ac.flights:
+                queue.append(f)
+        shuffle(queue)
+
+        return queue
+
+    def allocate_queue(self, G, queue, storymode=False):
+        """
+        For each flight of the queue, tries to allocate it to the airspace.
+
+        Notes
+        -----
+        Unchanged w.r.t Model 2
+
+        """
+
+        for i,f in enumerate(queue):
+            if storymode:
+                print "Flight with position", i, "from", f.source, "to", f.destination, "of company", f.ac_id
+                print "with parameters", f.par
+                print "tries to be allocated."
+            f.pos_queue=i
+            self.allocate_flight(G, f, storymode=storymode)
+            if storymode:
+                print "flight accepted:", f.fp_selected!=None
+                if f.fp_selected==None:
+                    print 'because '
+                print
+                print 
+                
+    def allocate_flight(self, G, flight, storymode=False):
+        """
+        Tries to allocate the flights by sequentially checking if each flight plan does not overload any sector,
+        beginning with the best ones. The rejection of the flights is kept in memory, as
+        well as the first sector overloaded (bottleneck), and the flight plan selected.
+
+        Parameters
+        ----------
+        G : Net Object
+            (Sector) Network on which on which the flights will be allocated. 
+        flight : Flight object
+            The flight which has to allocated to the network.
+        storymode : bool, optional
+            Used to print very descriptive output.
+
+        Notes
+        -----
+        Unchanged w.r.t. Model 2
+
+        Changed in 2.2: using intervals.
+        Changed in 2.7: sectors of airports are checked independently.
+        Changed in 2.9: airports are not checked anymore.
+        Changed in 2.9.3: airports are checked again :).
+
+        """
+
+        i=0
+        found=False
+        #print 'flight id', flight.ac_id
+        while i<len(flight.FPs) and not found:
+            # print 'fp id', i
+            fp=flight.FPs[i]
+            #print 'fp.p', fp.p
+            self.compute_flight_times(G, fp)
+            path, times=fp.p, fp.times
+
+            if storymode:
+                print "     FP no", i, "tries to be allocated with trajectory (sectors):"
+                print fp.p
+                print "and crossing times:"
+                print fp.times
+
+            #first=1 ###### ATTENTION !!!!!!!!!!!
+            first=0 ###### ATTENTION !!!!!!!!!!!
+            #last=len(path)-1 ########## ATTENTION !!!!!!!!!!!
+            last=len(path) ########## ATTENTION !!!!!!!!!!!
+            
+            j=first
+            while j<last and not self.overload_sector(G, path[j],(times[j],times[j+1])):#and self.node[path[j]]['load'][j+time] + 1 <= self.node[path[j]]['capacity']:
+                j+=1 
+
+            fp.accepted = not ((j<last) or self.overload_airport(G, path[0],(times[0],times[1])) or self.overload_airport(G, path[-1],(times[-2],times[-1])))
+                  
+            path_overload = j<last
+            source_overload = self.overload_airport(G, path[0],(times[0],times[1]))
+            desetination_overload = self.overload_airport(G, path[-1],(times[-2],times[-1]))
+
+            if storymode:
+                print "     FP has been accepted:", fp.accepted
+                if not fp.accepted:
+                    if path_overload: 
+                        print "     because sector", path[j], "was full."
+                    if source_overload:
+                        print "     because source airport was full."
+                        print G.node[path[0]]['load_airport']
+                        print G.node[path[0]]['capacity_airport']
+                    if desetination_overload:
+                        print "     because destination airport was full."
+
+            if fp.accepted:
+                self.allocate(G, fp, storymode=storymode, first=first, last=last)
+                flight.fp_selected=fp
+                flight.accepted = True
+                found=True
+            else:
+                if j<last:
+                    fp.bottleneck=path[j]
+            i+=1 
+
+        if not found:
+            flight.fp_selected=None
+            flight.accepted = False
+        
+    def compute_flight_times(self, G, fp):
+        """
+        Compute the entry times and exit times of each sector for the trajectory of the given flight
+        plan. Store them in the 'times' attribute of the flight plan.
+
+        Parameters
+        ----------
+        G : hybrid network.
+        fp : FlightPlan object.
+        
+        Notes
+        -----
+        Changed in 2.6.4: adapted for Model 1
+
+        (From Model 2)
+        Changed in 2.8: based on navpoints.
+
+        """
+        
+        ints = [0.]*(len(fp.p)+1)
+        ints[0] = fp.t
+        road = fp.t
+        for i in range(1,len(fp.p)):
+            w = G[fp.p[i-1]][fp.p[i]]['weight']
+            ints[i] = road + w/2.
+            road += w
+        ints[len(fp.p)] = road        
+        fp.times = ints
+        
+    def overload_sector_hours(self, G, n, (t1, t2)):
+        """
+        Check if the sector n would be overloaded if an additional flight were to 
+        cross it between times t1 and t2.
+
+        Parameters
+        ----------
+        G : Net object
+            Unmodified.
+        n : int or string
+            sector to check.
+        (t1, t2) : (float, float)
+            times of entry and exit of the flight in the sector n.
+        
+        Returns
+        -------
+        overload : boolean,
+            True if the sector would be overloaded with the allocation of this flight plan.
+
+        Notes
+        -----
+        Unchanged w.r.t. Model 2.
+        Changed in 2.9: it does not check anymore if the maximum number of flights have 
+        overreached the capacity, but if the total number of flights during an hour 
+        (counting those already there at the beginning and those still there at the end)
+        is greater than the capacity. 
+        Changed in 2.9.8: added the condition h<len(G.node[n]['load']). There is now an 
+        absolute reference in time and the weights of the network are in minutes.
+
+        """
+
+        overload = False
+        h = 0 
+        while float(h) <= t2/60. and h<len(G.node[n]['load']) and not overload:
+            # try:
+            if h+1 > t1/60. and G.node[n]['load'][h]+1>G.node[n]['capacity']:
+                overload = True
+            # except:
+            #     print "Problem. t1/60., t2/60., h:", t1/60., t2/60., h
+            #     print "G.node[n]['load']:", G.node[n]['load']
+            #     raise
+            h += 1
+        return overload
+
+    def overload_sector_peaks(self, G, n, (t1, t2)):
+        """
+        Old version (2.8.2) of previous method. Based on maximum number of 
+        planes in a given sector at any time. See initialize_load method
+        for more details.
+
+        Notes
+        -----
+        Unchanged w.r.t. Model 2.
+        Was previously called overload_capacity
+
+        """
+        
+        ints = np.array([p[0] for p in G.node[n]['load_old']])
+        
+        caps = np.array([p[1] for p in G.node[n]['load_old']])
+        i1 = max(0,list(ints>=t1).index(True)-1)
+        i2 = list(ints>=t2).index(True)
+        
+        pouet = np.array([caps[i]+1 for i in range(i1,i2)])
+
+        return len(pouet[pouet>G.node[n]['capacity']]) > 0
+
+    def overload_airport_hours(self, G, n, (t1, t2)):
+        """
+        Same than overload_sector_hours, for airports.
+
+        Notes
+        ------
+        Unchanged w.r.t to Model 2
+        Changed in 2.9.8: added the condition h<len(G.node[n]['load'])
+        """
+        
+        overload = False
+        h = 0 
+        while float(h) <= t2/60. and h<len(G.node[n]['load']) and not overload:
+            if h+1 > t1/60. and G.node[n]['load_airport'][h]+1>G.node[n]['capacity_airport']:
+                overload = True
+            h += 1
+        return overload
+
+    def overload_airport_peaks(self, G, n, (t1, t2)):
+        """
+        Same then overload_sector_peaks, for airports.
+
+        Notes
+        -----
+        Unchanged w.r.t. Model 2.
+        """
+
+        ints = np.array([p[0] for p in G.node[n]['load_old_airport']])
+        
+        caps = np.array([p[1] for p in G.node[n]['load_old_airport']])
+        i1 = max(0,list(ints>=t1).index(True)-1)
+        i2 = list(ints>=t2).index(True)
+        
+        pouet = np.array([caps[i]+1 for i in range(i1,i2)])
+
+        return len(pouet[pouet>G.node[n]['capacity_airport']]) > 0
+        
+    def allocate_hours(self, G, fp, storymode=False, first=0, last=-1):
+        """
+        Fill the network with the given flight plan. For each sector of the flight plan, 
+        add one to the load for each slice of time (one hour slices) in which the flight 
+        is present in the sector. 
+        The 'first' and 'last' optional arguments are used if the user wants to avoid 
+        to load the first and last sectors, as it was in the first versions.
+
+        Parameters
+        ----------
+        G : Net objeect
+            Modified in output with loads updated.
+        fp : FlightPlan object
+            flight plan to allocate.
+        storymode : boolean, optional
+            verbosity.
+        first : int, optional
+            position of the first sector to load in the trajectory. Deprecated.
+        last : int, optional
+            position of the last sector to load. Deprecated.
+
+        Notes
+        -----
+        Unchanged w.r.t. Model 2
+
+        (From Model 2)
+        Changed in 2.9: completely changed (count number of flights per hour).
+        Changed in 2.9.5: does change the load of the first and last sector.
+        Changed in 2.9.8: added condition h<G.node[n]['load']
+
+        """
+
+        if storymode:
+            print "NM allocates the flight."
+        path, times = fp.p, fp.times
+        #for i in range(1,len(path)-1):
+        if last==-1: 
+            last = len(path)
+        for i in range(first, last):
+            n = path[i]
+            t1, t2 = times[i]/60.,times[i+1]/60.
+            h = 0
+            while h<t2 and h<len(G.node[n]['load']):
+                if h+1>t1:
+                    if storymode:
+                        print "Load of sector", n, "goes from",  G.node[n]['load'][h], "to", G.node[n]['load'][h]+1, "for interval", h, "--", h+1
+                    G.node[n]['load'][h] += 1
+                h+=1
+
+    def allocate_peaks(self, G, fp, storymode=False):
+        """
+        Old version of previous method.
+
+        Notes
+        -----
+        Unchanged w.r.t Model 2.
+        
+        """
+
+        path,times=fp.p,fp.times
+        for i,n in enumerate(path):
+            t1,t2=times[i],times[i+1]
+            ints=np.array([p[0] for p in G.node[n]['load_old']])
+            caps=np.array([p[1] for p in G.node[n]['load_old']])
+            i1=list(ints>=t1).index(True)
+            i2=list(ints>=t2).index(True)
+            if ints[i2]!=t2:
+                G.node[n]['load_old'].insert(i2,[t2,caps[i2-1]])
+            if ints[i1]!=t1:
+                G.node[n]['load_old'].insert(i1,[t1,caps[i1-1]])
+                i2+=1
+            for k in range(i1,i2):
+                G.node[n]['load_old'][k][1]+=1
+
+    def deallocate_hours(self, G, fp, first=0, last=-1):
+        """
+        Used to deallocate a flight plan not legit anymore, for instance because one 
+        sector has been shutdown.
+        
+        Parameters
+        ----------
+        G : Net object,
+            Loads are modified as output
+        fp : FlightPlan object
+            Flight plan to deallocate.
+        first : int, optional
+            position of the first sector to unload in the trajectory. Must be consistent
+            with the allocation's parameters. Deprecated.
+        last : int, optional
+            position of the last sector to unload. Must be consistent
+            with the allocation's parameters. Deprecated.
+
+        Notes
+        -----
+        Unchanged w.r.t. Model 2.
+
+        New in 2.5
+        Changed in 2.9: completely changed, based on hour slices.
+
+        """
+        
+        path,times = fp.p,fp.times
+        if last==-1: 
+            last = len(path)
+        #for i in range(1, len(path)-1):
+        for i in range(first, last):
+            n = path[i]
+            t1,t2 = times[i]/60.,times[i+1]/60.
+            h=0
+            while h<t2:
+                if h+1>t1:
+                    G.node[n]['load'][h]-=1
+                h+=1
+
+    def deallocate_peaks(self, fp):
+        """
+        Old version of previous deallocate_hours. See description of initialize_load.
+        
+        Notes
+        -----
+        Unchanged w.r.t. Model 2.
+        """
+
+        path,times=fp.p,fp.times
+        for i,n in enumerate(path):
+            t1,t2=times[i],times[i+1]
+            ints=np.array([p[0] for p in G.node[n]['load_old']])
+            i1=list(ints==t1).index(True)
+            i2=list(ints==t2).index(True)
+            for k in range(i1,i2):
+                G.node[n]['load_old'][k][1]-=1
+            
+            if G.node[n]['load_old'][i2-1][1]==G.node[n]['load_old'][i2][1]:
+                G.node[n]['load_old'].remove([t2,G.node[n]['load_old'][i2][1]])
+            if G.node[n]['load_old'][i1-1][1]==G.node[n]['load_old'][i1][1]:
+                G.node[n]['load_old'].remove([t1,G.node[n]['load_old'][i1][1]])
+
+    def M0_to_M1(self, G, queue, N_shocks, tau, storymode=False):
+        """
+        Routine aiming at modelling the shut down of sectors due to bad weather or strikes. Some 
+        sectors are shut down at random. Flight plans crossing these sectors are deallocated. 
+        Shortest paths are recomputed. Finally, deallocated flights are reallocated on the 
+        new network, with the same initial order. This procedure is repeated after each sector 
+        is shut down.
+        
+        Parameters
+        ----------
+        G : hybrid network
+        queue : list of Flight objects
+            initial queue before the shocks.
+        N_shocks : int
+            number of sectors to shut down.
+        tau : float
+            parameter of shift in time (TODO: should not really be here...).
+        
+        Notes
+        -----
+        Chnaged in 2.6.4: apdated from Model 2.
+
+        (From Model 2)
+        Changed in 2.9: updated for navpoints and can now shut down sectors containing airports.
+        Transferred from simulationO.
+
+        """
+        
+        sectors_to_shut = sample(G.nodes(), N_shocks)
+
+        for n in sectors_to_shut:
+            flights_to_reallocate = []
+            flights_suppressed = []          
+            sec_pairs_to_compute = []
+            #nav_pairs_to_compute = []
+            for f in queue:
+                if f.accepted:
+                    path_sec = f.fp_selected.p
+                    if n in path_sec:
+                        if path_sec[0]==n or path_sec[-1]==n:
+                            flights_suppressed.append(f) # The flight is suppressed if the source or the destination is within the shut sector
+                        else:
+                            flights_to_reallocate.append(f)
+                            sec_pairs_to_compute.append((path_sec[0], path_sec[-1]))
+                            #nav_pairs_to_compute.append((f.fp_selected.p_nav[0], f.fp_selected.p_nav[-1]))
+
+            sec_pairs_to_compute = list(set(sec_pairs_to_compute))
+            #nav_pairs_to_compute = list(set(nav_pairs_to_compute))
+                    
+            if storymode:
+                first_suppressions = len(flights_suppressed)
+                print
+                print 'Shutting sector', n
+                print 'Number of flights to be reallocated:', len(flights_to_reallocate)
+                print 'Number of flights suppressed:', len(flights_suppressed)
+
+            for f in flights_to_reallocate + flights_suppressed:
+                self.deallocate(G, f.fp_selected)
+                #queue.remove(f)
+            
+            G.shut_sector(n)
+            G.build_H()
+            #G.G_nav.build_H()
+
+            if storymode:
+                print 'Recomputing shortest paths...'
+
+            G.compute_shortest_paths(G.Nfp, repetitions=False, delete_pairs=False)
+            #G.compute_all_shortest_paths(Nsp_nav, perform_checks=True, sec_pairs_to_compute=sec_pairs_to_compute, nav_pairs_to_compute=nav_pairs_to_compute)                
+            
+            for f in flights_to_reallocate:
+                if not (f.source, f.destination) in G.short.keys():
+                    flights_suppressed.append(f)
+                else:
+                    f.compute_flightplans(tau, G)
+                    self.allocate_flight(G, f)
+
+            if storymode:
+                print 'There were', len(flights_suppressed) - first_suppressions, 'additional flights which can not be allocated.'
+            for f in flights_suppressed:
+                for fp in f.FPs:
+                    fp.accepted = False
+                f.accepted = False
+
+    def M0_to_M1_quick(self, G, queue, N_shocks, tau, storymode=False, sectors_to_shut=None):
+        """
+        Same method than previous one, but closes all sectors at the same time, 
+        then recomputes the shortest paths.
+
+        Parameters
+        ----------
+        G : Net object
+        queue : list of Flight objects
+            initial queue before the shocks.
+        N_shocks : int
+            number of sectors to shut down.
+        tau : float
+            parameter of shift in time (TODO: should not really be here...).
+        
+        Notes
+        -----
+        Changed in 2.6.4: Adapted from Model 2.
+
+        (From Model 2)
+        New in 2.9.7.
+        
+        """
+        
+        if storymode:
+            print "N_shocks:", N_shocks
+        if sectors_to_shut==None:
+            #sectors_to_shut = shock_sectors(G, N_shocks)#sample(G.nodes(), N_shocks)
+            sectors_to_shut = sample(G.nodes(), int(N_shocks))
+        else:
+            sectors_to_shut = [sectors_to_shut]
+
+        if sectors_to_shut!=[]:
+            flights_to_reallocate = []
+            flights_suppressed = []          
+            sec_pairs_to_compute = []
+            #nav_pairs_to_compute = []
+            for f in queue:
+                if f.accepted:
+                    path_sec = f.fp_selected.p
+                    if set(sectors_to_shut).intersection(set(path_sec))!=set([]):
+                        if path_sec[0] in sectors_to_shut or path_sec[-1] in sectors_to_shut:
+                            flights_suppressed.append(f) # The flight is suppressed if the source or the destination is within the shut sector
+                        else:
+                            flights_to_reallocate.append(f)
+                            sec_pairs_to_compute.append((path_sec[0], path_sec[-1]))
+                            #nav_pairs_to_compute.append((f.fp_selected.p_nav[0], f.fp_selected.p_nav[-1]))
+
+            sec_pairs_to_compute = list(set(sec_pairs_to_compute))
+            #nav_pairs_to_compute = list(set(nav_pairs_to_compute))
+                    
+            if storymode:
+                first_suppressions = len(flights_suppressed)
+                print
+                print 'Shutting sectors', sectors_to_shut
+                print 'Number of flights to be reallocated:', len(flights_to_reallocate)
+                print 'Number of flights suppressed:', len(flights_suppressed)
+
+            for f in flights_to_reallocate + flights_suppressed:
+                self.deallocate(G, f.fp_selected)
+                #queue.remove(f)
+            
+            for n in sectors_to_shut:
+                G.shut_sector(n)
+
+            G.build_H()
+            #G.G_nav.build_H()
+
+            if storymode:
+                print 'Recomputing shortest paths...'
+            G.compute_shortest_paths(G.Nfp, repetitions=False, delete_pairs=False)
+            #G.compute_all_shortest_paths(Nsp_nav, perform_checks=True, sec_pairs_to_compute=sec_pairs_to_compute, nav_pairs_to_compute=nav_pairs_to_compute, verb = storymode)                
+            
+            for f in flights_to_reallocate:
+                if not (f.source, f.destination) in G.short.keys():
+                    flights_suppressed.append(f)
+                else:
+                    f.compute_flightplans(tau, G)
+                    self.allocate_flight(G, f)
+
+            if storymode:
+                print 'There were', len(flights_suppressed) - first_suppressions, 'additional flights which can not be allocated.'
+                print
+            for f in flights_suppressed:
+                for fp in f.FPs:
+                    fp.accepted = False
+                f.accepted = False
+
+
 class FlightPlan:
     """
     Class FlightPlan. 
@@ -53,9 +730,6 @@ class Flight:
         self.source=source
         self.destination=destination
         self.pref_time=pref_time
-#        if self.pref_time>15:
-#            print 'poeut'
-        #self.FPs=FPs
         self.ac_id=ac_id 
         self.par=par
         
@@ -212,27 +886,6 @@ class Net(nx.Graph):
             #self.node[a]['capacity']=100000                # TODO: check this.
             self.node[a]['capacity_airport'] = C_airport
 
-    def allocate(self,fp):
-        """
-        Fill the network with the given flight plan.
-
-        TO REMOVE
-        """
-        path,times=fp.p,fp.times
-        for i,n in enumerate(path):
-            t1,t2=times[i],times[i+1]
-            ints=np.array([p[0] for p in self.node[n]['load']])
-            caps=np.array([p[1] for p in self.node[n]['load']])
-            i1=list(ints>=t1).index(True)
-            i2=list(ints>=t2).index(True)
-            if ints[i2]!=t2:
-                self.node[n]['load'].insert(i2,[t2,caps[i2-1]])
-            if ints[i1]!=t1:
-                self.node[n]['load'].insert(i1,[t1,caps[i1-1]])
-                i2+=1
-            for k in range(i1,i2):
-                self.node[n]['load'][k][1]+=1
-
     def basic_statistics(self, rep='.', name=None):
         """
         Computes basic stats on degree, weights and capacities. 
@@ -385,24 +1038,6 @@ class Net(nx.Graph):
     def capacities(self):
         return {n:self.node[n]['capacity'] for n in self.nodes()}
 
-    def compute_flight_times(self,fp):
-        """
-        
-        Changed in 2.8: times computed with the navpoint network.
-        TO REMOVE
-
-        """
-        
-        ints=[0.]*(len(fp.p)+1)
-        ints[0]=fp.t
-        road=fp.t
-        for i in range(1,len(fp.p)):
-            w=self[fp.p[i-1]][fp.p[i]]['weight']
-            ints[i]=road + w/2.
-            road+=w
-        ints[len(fp.p)]=road        
-        fp.times=ints
-
     def compute_shortest_paths(self, Nfp, repetitions=True, pairs=[], 
         verb=1, delete_pairs=True):
         """
@@ -547,42 +1182,6 @@ class Net(nx.Graph):
         """
         
         return self.short.keys()
-
-    def deallocate(self,fp):
-        """
-        New in 2.5: used to deallocate a flight plan not legit anymore (because one sector has been shutdown).
-        
-        TO REMOVE
-        """
-        
-        path,times=fp.p,fp.times
-        #print 'path, times', path, times
-        for i,n in enumerate(path):
-            t1,t2=times[i],times[i+1]
-            ints=np.array([p[0] for p in self.node[n]['load']])
-            #caps=np.array([p[1] for p in self.node[n]['load']])
-            i1=list(ints==t1).index(True)
-            i2=list(ints==t2).index(True)
-            for k in range(i1,i2):
-                self.node[n]['load'][k][1]-=1
-                
-           # print 't1, t2, i1, i2', t1, t2, i1, i2
-           # print [t2,caps[i2]]
-           # print [t1,caps[i1]]
-           # print 
-                
-            try:
-                if self.node[n]['load'][i2-1][1]==self.node[n]['load'][i2][1]:
-                    self.node[n]['load'].remove([t2,self.node[n]['load'][i2][1]])
-                if self.node[n]['load'][i1-1][1]==self.node[n]['load'][i1][1]:
-                    self.node[n]['load'].remove([t1,self.node[n]['load'][i1][1]])
-            except:
-               # print fp
-               # print fp.p
-               # print [t2,caps[i2]], [t1,caps[i1]]
-                raise
-            
-            #print 'load after', self.node[n]['load']
 
     def fix_airports(self, *args, **kwargs):
         """
@@ -811,17 +1410,6 @@ class Net(nx.Graph):
         else:
             print 'Network was found empty!'   
 
-    def initialize_load(self):
-        """
-        Initialize loads, with length given by t_max.
-        Changed in 2.2: keeps in memory only the intervals.
-        Changed in 2.5: t_max is set to 10**6.
-
-        TO REMOVE.
-        """
-        for n in self.nodes():
-            self.node[n]['load']=[[0,0],[10**9,0]] # the last one should ALWAYS be (t_max,0.)
-
     def kshortestPath(self, i, j, k): 
         """
         Return the k weighted shortest paths on the network thanks to YenKSP algorithm. Uses the DiGraph,
@@ -868,28 +1456,6 @@ class Net(nx.Graph):
             spath_new += a[:]
 
         return spath_new
-    
-    def overload_capacity(self,n,(t1,t2)):
-        """
-        Check if the sector is overloading without actually building the new set
-        of intervals.
-
-        TO REMOVE.
-        """
-        ints=np.array([p[0] for p in self.node[n]['load']])
-        
-        caps=np.array([p[1] for p in self.node[n]['load']])
-        i1=max(0,list(ints>=t1).index(True)-1)
-        #try:
-        i2=list(ints>=t2).index(True)
-       # except:
-       #     print t2
-       #     print ints
-       #     raise
-        
-        pouet=np.array([caps[i]+1 for i in range(i1,i2)])
-        
-        return len(pouet[pouet>self.node[n]['capacity']])>0
 
     def shut_sector(self,n):
         for v in nx.neighbors(self,n):
