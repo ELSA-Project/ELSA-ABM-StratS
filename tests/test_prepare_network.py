@@ -131,6 +131,7 @@ class TestWholeFunction(unittest.TestCase):
 		print "===================================="
 		seed(see_)
 		rep = '../example'
+		paras_G['name'] = 'test1'
 		G = prepare_network(paras_G, rep=rep, show=False)
 		#os.system('rm Example.pic')
 		#os.system('rm Example.png')
@@ -170,6 +171,7 @@ class TestWholeFunction(unittest.TestCase):
 		seed(see_)
 		rep = '../example'
 
+		paras_G['name'] = 'test2'
 		paras_G['type_of_net'] = 'T'
 		G = prepare_network(paras_G, rep=rep, show=False)
 		#os.system('rm Example.pic')
@@ -178,9 +180,9 @@ class TestWholeFunction(unittest.TestCase):
 
 		# print "Airports:", G.get_airports()
 		# print "Connections:", G.connections()
-		# print "Edges:"
-		# for n1, n2 in G.edges():
-		# 	print n1, n2
+		print "Edges (with weights):"
+		for n1, n2 in G.edges():
+			print n1, n2, G[n1][n2]['weight']
 		# print 'Capacity of sectors:'
 		# for n in G.nodes():
 		# 	print n, ':', G.node[n]['capacity']
@@ -199,6 +201,50 @@ class TestWholeFunction(unittest.TestCase):
 			self.assertTrue('capacity_airport' in G.node[a].keys())
 			self.assertEqual(G.node[a]['capacity_airport'], 100000)
 
+	def test_prepare_network_triangular_weights(self):
+		from paras_G_test import paras_G
+
+		# Manual seed
+		see_ = 31
+		print "===================================="
+		print "USING SEED", see_
+		print "===================================="
+		seed(see_)
+		rep = '../example'
+
+		paras_G['name'] = 'test3'
+		paras_G['type_of_net'] = 'T'
+		paras_G['typ_weights'] = 'lognormal' 
+		paras_G['par_weights'] = (20., 0.00001)
+		G = prepare_network(paras_G, rep=rep, show=False)
+		#os.system('rm Example.pic')
+		#os.system('rm Example.png')
+		#os.system('rm Example_basic_stats_net.txt')
+
+		# print "Airports:", G.get_airports()
+		# print "Connections:", G.connections()
+		# print "Edges (with weights):"
+		# for n1, n2 in G.edges():
+		# 	print n1, n2, G[n1][n2]['weight']
+		# print 'Capacity of sectors:'
+		# for n in G.nodes():
+		# 	print n, ':', G.node[n]['capacity']
+		# print 'Capacity of airports:'
+		# for a in G.get_airports():
+		# 	print a, ':', G.node[a]['capacity_airport']
+
+		#print "mean wiehgt:", np.array([G[n1][n2]['weight'] for n1, n2 in G.edges()]).mean()
+
+		self.assertEqual(len(G.get_airports()), 2)
+		self.assertEqual(len(G.connections()), 2)
+		self.assertTrue((0, 8) in G.connections())
+		self.assertTrue((8, 0) in G.connections())
+		for n in G.nodes():
+			self.assertEqual(G.node[n]['capacity'], 5)
+
+		for a in G.get_airports():
+			self.assertTrue('capacity_airport' in G.node[a].keys())
+			self.assertEqual(G.node[a]['capacity_airport'], 100000)
 
 
 if __name__ == '__main__':

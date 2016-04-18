@@ -86,7 +86,11 @@ paras_G['min_dis'] = 1
 paras_G['file_weights'] = None
 paras_G['generate_weights_from_traffic'] = False
 if paras_G['file_weights'] == None and not paras_G['generate_weights_from_traffic']:
-	paras_G['par_weights'] = 20 # average crossing time for napvoint network in minutes.
+	# type of weights for crossing times.
+	# can be gauss, lognormal, constant, or coords. 
+	paras_G['typ_weights'] = 'coords' 
+	# Needs to be (mu, sigma) if gauss or lognormal
+	paras_G['par_weights'] = 20. # average crossing time for napvoint network in minutes.
 
 # --------------- Other Parameters ----------------
 

@@ -419,7 +419,7 @@ def give_capacities_and_weights(G, paras_G):
                 G.G_nav[e[0]][e[1]]['weight'] = weight
     else:
         if paras_G['weights']==None:
-            G.generate_weights(typ='coords', par=paras_G['par_weights'])
+            G.generate_weights(typ=paras_G['typ_weights'], par=paras_G['par_weights'])
         else:
             G.fix_weights(paras_G['weights'], typ='data')
     
@@ -706,7 +706,7 @@ def prepare_network(paras_G, rep=None, save_name=None, show=True):
             with open(join(rep, save_name + '_flights_selected.pic'),'w') as f:
                 pickle.dump(flights_selected, f)
 
-    G.basic_statistics(rep=name  + '_')
+    G.basic_statistics(rep=rep)
     
     print 'Network saved as', join(rep, save_name)+'.pic'
     #show_everything(G.polygons,G,save=True,name=name,show=False)       

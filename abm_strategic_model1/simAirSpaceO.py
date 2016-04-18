@@ -16,7 +16,8 @@ from os.path import join
 import networkx as nx
 from random import sample, uniform, gauss, shuffle
 import numpy as np
-from numpy import sqrt
+from numpy import sqrt, exp, log
+from numpy.random import lognormal
 import matplotlib.delaunay as triang
 import pickle
 
@@ -617,35 +618,38 @@ class Net(nx.Graph):
             self.node[a]['capacity']=100000                 # TODO: check this.
             self.node[a]['capacity_airport'] = C_airport
 
-    def generate_weights(self,typ='gauss',par=[1.,0.01],values=[]):
+    def generate_weights(self, typ='coords', par=[1.,0.01], values=[]):
         """
         Generates weights with a gaussian distribution or given by the euclidean distance
         between nodes, tuned so that the average matches the one given as argument.
 
         Parameters
         ----------
-        input typ: str
+        typ: str
             should be 'gauss' or 'coords'. The first produces gaussian weights with mean 
             given by the first element of par and the deviation given by the second element
             of par. 'coords' computes the euclideian distance between nodes (based on key 
             coord) and adjust it so the average weight over all edges matches the float given
             by par.
-        input par: list or float
+        par: list or float
             If typ is 'gauss', gives the mean and deviation. Otherwise, should be a float giving 
             the average weight.
 
         Notes
         -----
         Changed in 2.6.4: taken from Model 2 (unchanged).
+        Changed in 2.6.4: defulat optinal for typ is now "coords".
 
         """
 
-        self.typ_weights, self.par_weights=typ, par
+        assert typ in ['constant', 'gauss', 'lognormal', 'coords']
+
+        self.typ_weights, self.par_weights = typ, par
         if typ=='gauss':
             mu = par[0]
             sigma = par[1]
             for e in self.edges():
-                self[e[0]][e[1]]['weight'] = max(gauss(mu, sigma),0.00001)
+                self[e[0]][e[1]]['weight'] = max(gauss(mu, sigma), 0.00001)
         elif typ=='coords':
             for e in self.edges():
                 #self[e[0]][e[1]]['weight']=sqrt((self.node[e[0]]['coord'][0] - self.node[e[1]]['coord'][0])**2 +(self.node[e[0]]['coord'][1] - self.node[e[1]]['coord'][1])**2)
@@ -653,7 +657,19 @@ class Net(nx.Graph):
             avg_weight = np.mean([self[e[0]][e[1]]['weight'] for e in self.edges()])
             for e in self.edges():
                 self[e[0]][e[1]]['weight'] = par*self[e[0]][e[1]]['weight']/avg_weight
-        self.typ_weights = typ
+        elif typ=='constant':
+            for e in self.edges():
+                self[e[0]][e[1]]['weight'] = par
+        elif typ=='lognormal':
+            mu_t = par[0]
+            sig_t = par[1] 
+
+            mu = log(mu_t/sqrt((sig_t/mu_t**2) + 1.))
+            sig = sqrt(log((sig_t/mu_t**2) + 1.))
+            
+            for e in self.edges():
+                self[e[0]][e[1]]['weight'] = max(lognormal(mu, sig), 0.00001)
+
         self.weighted = True
             
     def generate_capacities(self, typ='constant', C=5, par=[1]):
