@@ -6,10 +6,8 @@ This is a general tool file.
 """
 
 import numpy as np
-#from string import split
 import os
 import sys
-#from math import *
 from time import gmtime, strftime
 from scipy.misc import comb
 from scipy.optimize import curve_fit
@@ -1047,18 +1045,52 @@ def map_of_net(G, colors='r', limits=(0,0,0,0), title='', size_nodes=1., size_ed
 #     artists = ax.scatter(x, y, lw=lw, edgecolor='w', **kwargs) for x, y in data]
 #     return artists
 
+def build_triangular(N):
+    """
+    build a triangular lattice in a rectangle with N nodes along the abscissa (so 4*N**2 in total)
+    
+    Parameters
+    ----------
+    N: int,
+        number of nodes along the abscissa
+
+    Returns
+    -------
+    G: Networkx Graph 
+        with nodes and edges
+
+    """
+    
+    eps = 10e-6
+    G = nx.Graph()   
+    a = 1./float(N+0.5) - eps
+    n = 0
+    j = 0
+    while j*sqrt(3.)*a <= 1.:
+        i=0
+        while i*a <= 1.:
+            G.add_node(n, coord=(i*a, j*sqrt(3.)*a)) 
+            n += 1
+            if i*a + a/2 < 1. and  j*sqrt(3.)*a + (sqrt(3.)/2.)*a < 1.:
+                G.add_node(n, coord=(i*a + a/2., j*sqrt(3.)*a + (sqrt(3.)/2.)*a))
+                n += 1
+            i += 1
+        j += 1
+            
+    for n in G.nodes():
+        for m in G.nodes():
+            if n!=m and abs(sqrt((G.node[n]['coord'][0] - G.node[m]['coord'][0])**2\
+            + (G.node[n]['coord'][1]- G.node[m]['coord'][1])**2) - a) <eps:
+                G.add_edge(n,m)
+
+    return G
 
 if __name__=='__main__':
-    #Tests-
-    print 'n_days=', (delay([2011,3,1,0,0,0]) - delay([2010,12,1,0,0,0]))/(24*3600)
-    print date_st(delay([2011,3,1,0,0,0]))
-    print
-    print 
-    print date_st(delay([2010,12,1,0,0,0]))
+    G = build_triangular(5)
+    
+    plt.plot([G.node[n]['coords'][0] for n in G.nodes()], [G.node[n]['coords'][1] for n in G.nodes()], 'ro')
+    for e in G.edges():
+        plt.plot([G.node[e[0]]['coords'][0], G.node[e[1]]['coords'][0]], [G.node[e[0]]['coords'][1], G.node[e[1]]['coords'][1]], 'r-')
+    plt.show()
 
-    with clock_time():
-        n_iter=10000
-        for i in range(n_iter):
-            j=i**2
-        print 'coin'
         

@@ -16,13 +16,11 @@ from os.path import join
 import networkx as nx
 from random import sample, uniform, gauss, shuffle
 import numpy as np
+from numpy import sqrt
 import matplotlib.delaunay as triang
-from triangular_lattice import build_triangular
-from math import sqrt
 import pickle
 
-
-from libs.general_tools import delay
+from libs.general_tools import delay, build_triangular
 from libs.YenKSP.graph import DiGraph
 from libs.YenKSP.algorithms import ksp_yen
 
@@ -295,8 +293,8 @@ class Net(nx.Graph):
             self.build_nodes(N, prelist=prelist, put_nodes_at_corners=put_nodes_at_corners)
             self.build_net(Gtype=Gtype, mean_degree=mean_degree)  
         elif Gtype=='T':
-            xAxesNodes = np.sqrt(N/float(1.4))
-            self = build_triangular(xAxesNodes)  
+            xAxesNodes = int(np.sqrt(N/float(1.4)))
+            self.import_from(build_triangular(xAxesNodes))
     
     def build_H(self): 
         """

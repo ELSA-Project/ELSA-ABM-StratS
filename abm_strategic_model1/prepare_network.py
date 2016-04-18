@@ -153,7 +153,7 @@ def compute_voronoi(G, xlims=(-1., 1.), ylims=(-1., 1.)):
     nodes = G.nodes()
 
     # Compute the voronoi tesselation with scipy
-    # print np.array([G.node[n]['coord'] for n in nodes])
+    #print np.array([G.node[n]['coord'] for n in nodes])
     vor = Voronoi(np.array([G.node[n]['coord'] for n in nodes]))
     # print
     # print dir(vor)

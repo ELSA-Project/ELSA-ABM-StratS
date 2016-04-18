@@ -1,10 +1,10 @@
 import sys
 sys.path.insert(1, '..')
 sys.path.insert(1, '../abm_strategic_model1')
-import unittest
-from networkx import Graph
-import types
 import os
+import unittest
+
+from networkx import Graph
 import numpy as np
 from shapely.geometry import Polygon
 import matplotlib.pyplot as plt
@@ -159,8 +159,6 @@ class TestWholeFunction(unittest.TestCase):
 			self.assertTrue('capacity_airport' in G.node[a].keys())
 			self.assertEqual(G.node[a]['capacity_airport'], 100000)
 
-		self.G = G
-
 	def test_prepare_network_triangular(self):
 		from paras_G_test import paras_G
 
@@ -192,8 +190,8 @@ class TestWholeFunction(unittest.TestCase):
 
 		self.assertEqual(len(G.get_airports()), 2)
 		self.assertEqual(len(G.connections()), 2)
-		self.assertTrue((4, 5) in G.connections())
-		self.assertTrue((5, 4) in G.connections())
+		self.assertTrue((0, 8) in G.connections())
+		self.assertTrue((8, 0) in G.connections())
 		for n in G.nodes():
 			self.assertEqual(G.node[n]['capacity'], 5)
 
