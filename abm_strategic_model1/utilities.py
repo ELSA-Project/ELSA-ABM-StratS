@@ -220,3 +220,144 @@ def draw_zonemap(x_min,y_min,x_max,y_max,res):
     m.drawmeridians(np.arange(-180, 180, 5), color='#bbbbbb')
     m.drawparallels(np.arange(-90, 90, 5), color='#bbbbbb')
     return 
+
+def extract_data_from_files(paras_G):
+    """
+    Used to import the different files from disk, like network, polygons, etc.
+    """
+    for item in ['net_sec', 'polygons', 'capacities', 'weights', 'airports_sec', 'flights_selected']:
+        if paras_G['file_' + item]!=None:
+            try:
+                with open( paras_G['file_' + item]) as f:
+                    try:
+                        paras_G[item] = pickle.load(f)
+                        print "Loaded file", paras_G['file_' + item], "for", item
+                    except:
+                        print "Could not load the file", paras_G['file_' + item], " as a pickle file."
+                        print "I skipped it and the", item, "will be generated or ignored."
+
+            except:
+                print "Could not find file",  paras_G['file_' + item]
+                print "I skipped it and the", item, "will be generated or ignored."
+
+            if item == 'airports_sec':
+                paras_G['nairports_sec'] = len(paras_G['airports_sec'])
+
+        else:
+            paras_G[item]=None
+
+    # Check consistency of pairs and airports.
+
+    for p1, p2 in paras_G['pairs_sec']:
+        try:
+            assert p1 in paras_G['airports_sec'] and p2 in paras_G['airports_sec']
+        except:
+            print "You asked a connection for which one of the airport does not exist:", (p1, p2)
+            raise
+
+    return paras_G
+
+# ============================================================================ #
+# =============================== Parameters ================================= #
+# ============================================================================ #
+
+class Paras(dict):
+    """
+    Class Paras
+    ===========
+    Custom dictionnary used to update parameters in a controlled way.
+    This class is useful in case of multiple iterations of simulations
+    with sweeping parameters and more or less complex interdependances
+    between variables.
+    In case of simple utilisation with a single iteration or no sweeping,
+    a simple dictionary is enough.
+
+    The update process is based on the attribute 'update_priority', 'to_update'.
+
+    The first one is a list of keys. First entries should be updated before updating 
+    later ones.
+
+    The second is a dictionary. Each value is a tuple (f, args) where f is function
+    and args is a list of keys that the function takes as arguments. The function
+    returns the value of the corresponding key. 
+
+    Notes
+    -----
+    'update_priority' and 'to_update' could be merged in an sorted dictionary.
+    New in 2.6.2: taken from Model 2 (unchanged).
+
+    """
+    
+    def __init__(self, dic):
+        for k,v in dic.items():
+            self[k]=v
+        self.to_update={}
+
+    def update(self, name_para, new_value):
+        """
+        Updates the value with key name_para to new_value.
+
+        Parameters
+        ----------
+        name_para : string
+            label of the parameter to be updated
+        new_value : object
+            new value of entry name_para of the dictionary.
+
+        Notes
+        -----
+        Changed in 2.9.4: self.update_priority instead of update_priority.
+
+        """
+        
+        self[name_para] = new_value
+        # Everything before level_of_priority_required should not be updated, given the para being updated.
+        lvl = self.levels.get(name_para, len(self.update_priority)) #level_of_priority_required
+        #print name_para, 'being updated'
+        #print 'level of priority:', lvl, (lvl==len(update_priority))*'(no update)'
+        for j in range(lvl, len(self.update_priority)):
+            k = self.update_priority[j]
+            (f, args) = self.to_update[k]
+            vals = [self[a] for a in args] 
+            self[k] = f(*vals)
+
+    def analyse_dependance(self):
+        """
+        Detect the first level of priority hit by a dependance in each parameter.
+        Those who don't need any kind of update are not in the dictionnary.
+
+        This should be used once when the 'update_priority' and 'to_update' are 
+        finished.
+
+        It computes the attribute 'levels', which is a dictionnary, whose values are 
+        the parameters. The values are indices relative to update_priority at which 
+        the update should begin when the parameter corresponding to key is changed. 
+
+        """
+
+        # print 'Analysing dependances of the parameter with priorities', self.update_priority
+        self.levels = {}
+        for i, k in enumerate(self.update_priority):
+            (f, args) = self.to_update[k]
+            for arg in args:
+                if arg not in self.levels.keys():
+                    self.levels[arg] = i
+ 
+def read_paras(paras_file=None, post_process=True):
+    """
+    Reads parameter file for a single simulation.
+
+    Notes
+    -----
+    New in 2.6.2: taken from Model 2
+    """
+    if paras_file==None:
+        import my_paras as paras_mod
+    else:
+        paras_mod = imp.load_source("paras", paras_file)
+    paras = paras_mod.paras
+
+    if post_process:
+        paras = post_process_paras(paras)
+
+    return paras

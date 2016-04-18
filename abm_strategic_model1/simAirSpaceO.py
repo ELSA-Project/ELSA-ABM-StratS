@@ -3,24 +3,30 @@
 
 
 import sys
-from paths import path_ksp
-sys.path.insert(1, path_ksp)
+sys.path.insert(1, '..')
+sys.path.insert(1, '../libs/YenKSP')
+
+#import sys
+#from paths import path_ksp
+#sys.path.insert(1, path_ksp)
 #sys.path.insert(1,'../Distance')
+import os
+from os.path import join
 
 import networkx as nx
-from graph import DiGraph
-from algorithms import ksp_yen
 from random import sample, uniform, gauss, shuffle
 import numpy as np
 import matplotlib.delaunay as triang
 from triangular_lattice import build_triangular
 from math import sqrt
 import pickle
-import os
 
-from general_tools import delay
 
-version='2.6.3'
+from libs.general_tools import delay
+from libs.YenKSP.graph import DiGraph
+from libs.YenKSP.algorithms import ksp_yen
+
+version='2.6.4'
 
 class FlightPlan:
     """
@@ -139,551 +145,79 @@ class AirCompany:
     def __repr__(self):
         return 'AC with para ' + str(self.par)
         
-
 class Net(nx.Graph):
     """
     Class Net
     =========
     Derived from nx.Graph. Several methods added to build it, generate, etc...
+
+    Notes
+    ----
+    Changes in 2.6.4: sorted methods and imported methods from Model 2.
+
     """
+    
     def __init__(self):
         super(Net, self).__init__()
-        
-    def import_from(self,G):
+    
+    def add_airports(self, airports, min_dis, pairs=[], C_airport=10, singletons=False):
         """
-        Used to import the data of an already existing graph (networkx) in a Net obect.
-        Weights and directions are conserved.
-        """
-        print 'Importing network...'
-        self.add_nodes_from(G.nodes(data=True))
-        self.add_weighted_edges_from([(e[0],e[1],G[e[0]][e[1]]['weight']) for e in G.edges()])
-        e1=G.edges()[0]
-        e2=G.edges()[1]
-        self.weighted=not (self[e1[0]][e1[1]]['weight']==self[e2[0]][e2[1]]['weight']==1.)
+        Add airports given by user. The pairs can be given also by the user, 
+        or generated automatically, with minimum distance min_dis.
+
+        Parameters
+        ----------
+        min_dis : int 
+            minimum distance -- in nodes, EXCLUDING THE AIRPORTS -- betwen a pair of airports.
+        pairs : list of 2-tuples, optional
+            Pairs of nodes for connections. If [], all possible pairs between airports are computed 
+            (given min_dis)
+        C_airport : int, optional
+            Capacity of the sectors which are airports. They are used only by flights which are
+            departing or lending in this area. It is different from the standard capacity key
+            which is used for flights crossing the area, which is set to 10000.
+        singletons : boolean, optional
+            If True, pairs in which the source is identical to the destination are authorized 
+            (but min_dis has to be smaller or equal to 2.)
         
-        if self.weighted:
-            print 'Network was found weighted'
+        Notes
+        -----
+        New in 2.6.4: taken from Model 2
+        (From Model 2)
+        Changed in 2.9.8: changed name to add_airports. Now the airports are added
+        to the existing airports instead of overwriting the list.
+
+        """
+
+        if not hasattr(self, "airports"):
+            self.airports = airports
         else:
-            print 'Network was found NOT weighted'
-            print 'Example:', self[e1[0]][e1[1]]['weight']
-    
-    def build(self,N,nairports,min_dis,Gtype='D', sigma=1.,mean_degree=6):
-        """
-        Build a graph of the given type. Build also the correspding graph used for ksp_yen.
-        """
-        print 'Building random network of type ', Gtype
-        prob=mean_degree/float(N-1) # <k> = (N-1)p - 6 is the mean degree in Delaunay triangulation.
-        
-        self.weighted=sigma==0.
-
-        if Gtype=='D' or Gtype=='E':
-            for i in range(N):
-                    self.add_node(i,coord=[uniform(-1.,1.),uniform(-1.,1.)])           
-            x,y =  np.array([self.node[n]['coord'][0] for n in self.nodes()]),np.array([self.node[n]['coord'][1] for n in self.nodes()])   
-            cens,edg,tri,neig = triang.delaunay(x,y)
-            if Gtype=='D':
-                #graphtypeflag='Delaunay'
-                for p in tri:
-                    self.add_edge(p[0],p[1], weight=max(gauss(1., sigma),0.00001)) # generates weigthed links, centered on 1
-                    self.add_edge(p[1],p[2], weight=max(gauss(1., sigma),0.00001))
-                    self.add_edge(p[2],p[0], weight=max(gauss(1., sigma),0.00001))
-            elif Gtype=='E':  
-                #graphtypeflag='Erdos Renyi'
-                for n in self.nodes():
-                    for m in self.nodes():
-                        if n!=m:
-                            if np.random.rand()<=prob:
-                                self.add_edge(n,m)
-        elif Gtype=='T':
-            #graphtypeflag=='Triangular Lattice'
-            xAxesNodes=np.sqrt(N/float(1.4))
-            self=build_triangular(xAxesNodes)  
-        self.generate_airports(nairports,min_dis) 
-        self.build_H()
+            self.airports = np.array(list(set(list(self.airports) + list(airports))))
             
-    def generate_weights(self,typ='gauss',par=[1.,0.01],values=[]):
-        """
-        Generates weights with different distributions
-        """
-        assert typ in ['gauss', 'manual', 'coords']
-        self.typ_weights, self.par_weights=typ, par
-        if typ=='gauss':
-            mu=par[0]
-            sigma=par[1]
-            for e in self.edges():
-                self[e[0]][e[1]]['weight']=max(gauss(mu, sigma),0.00001)
-        elif typ=='coords':
-            for e in self.edges():
-                self[e[0]][e[1]]['weight']=sqrt((self.node[e[0]]['coord'][0] - self.node[e[1]]['coord'][0])**2 +(self.node[e[0]]['coord'][1] - self.node[e[1]]['coord'][1])**2)
-            avg_weight=np.mean([self[e[0]][e[1]]['weight'] for e in self.edges()])
-            for e in self.edges():
-                self[e[0]][e[1]]['weight']=self[e[0]][e[1]]['weight']/avg_weight
-            
-    def generate_capacities(self, C=5, typ='constant', par=[1], func=lambda a:a, file_capacities=None):
-        """
-        Generates capacities with different distributions
-        """
-        assert typ in ['constant', 'gauss', 'uniform', 'manual', 'traffic']
-        self.C, self.typ_capacities, self.par_capacities = C, typ, par
-        if typ=='constant':
-            for n in self.nodes():
-                self.node[n]['capacity']=C
-        elif typ=='gauss':
-            for n in self.nodes():
-                self.node[n]['capacity']=max(1,int(gauss(C,par[0])))
-        elif typ=='uniform':
-            for n in self.nodes():
-                self.node[n]['capacity']=max(1,int(uniform(C-par[0]/2.,C+par[0]/2.)))
-        elif typ=='manual':
-            f=open(file_capacities,'r')
-            properties=pickle.load(f)
-            f.close()
-            for n in self.nodes():
-                self.node[n]['capacity']=properties[n]['capacity']
-        elif typ=='traffic':
-            self.extract_capacity_from_traffic()
+        if not hasattr(self, "short"):
+            self.short = {}
 
-    def extract_capacity_from_traffic(self):
-        """
-        New in 2.9.3: Extract the "capacity", the maximum number of flight per hour, based on the traffic.
-        Changed in 2.9.4: added paras_real.
-        Changed in 2.9.5: fligths are given externally.
-
-        New in 2.6.3: imported and adapted from 2.9 fork. Defines the capacity with the peaks of traffic.
-        """
-        print 'Extracting the capacities from flights_selected...'
-
-        #flights=get_flights(paras_real)
-
-            
-        #loads = {n:[0 for i in range(48)] for n in G.nodes()}
-        loads = {n:[[0,0],[10**8,0]] for n in self.nodes()}
-        for f in self.flights_selected:
-            #print f['sec_path_t']
-            path, times = f['sec_path'], [delay(t) for t in f['sec_path_t']]
-            for i, n in enumerate(path):
-                t1, t2 = times[i],times[i+1]
-                ints = np.array([p[0] for p in loads[n]])
-                caps = np.array([p[1] for p in loads[n]])
-                i1=list(ints>=t1).index(True)
-                i2=list(ints>=t2).index(True)
-                if ints[i2]!=t2:
-                    loads[n].insert(i2,[t2,caps[i2-1]])
-                if ints[i1]!=t1:
-                    loads[n].insert(i1,[t1,caps[i1-1]])
-                    i2+=1
-                for k in range(i1,i2):
-                    loads[n][k][1]+=1
-
-            # hours = {}
-            # r = f['route_m1t']
-            # for i in range(len(r)):
-            #     if G.G_nav.idx_navs.has_key(r[i][0]):
-            #         p1=G.G_nav.idx_navs[r[i][0]]
-            #         if G.G_nav.has_node(p1):
-            #             s1=G.G_nav.node[p1]['sec']
-            #             hours[s1] = hours.get(s1,[]) + [int(float(delay(r[i][1], starting_date = date))/3600.)]
-
-            # for n,v in hours.items():
-            #     hours[n] = list(set(v))
-
-            # for n,v in hours.items():
-            #     for h in v:
-            #         loads[n][h]+=1
-
-        for n,v in loads.items():
-            self.node[n]['capacity'] = max([c[1] for c in v])
-
-    def generate_airports(self,nairports,min_dis):
-        """
-        Generate nairports airports. Build the accessible pairs of airports for this network
-        with a  minimum distance min_dis.
-        """
-        self.airports=sample(self.nodes(),nairports)
-        self.pairs=[(ai,aj) for ai in self.airports for aj in self.airports if len(nx.shortest_path(self, ai, aj))-2>=min_dis]
-        
-    def fix_airports(self,airports, min_dis, pairs=[]):
-        """
-        Fix airports given by user. The pairs can be given also by the user, 
-        or generated automatically, with minimum distance min_dis
-        Changed in 2.6.3: enforce the min_dis even when pairs are given.
-        """
-        self.airports = airports
-        if pairs == []:
-            self.pairs = [(ai,aj) for ai in self.airports for aj in self.airports if len(nx.shortest_path(self, ai, aj))-2>=min_dis]
+        if pairs==[]:
+            for ai in self.airports:
+                for aj in self.airports:
+                    if len(nx.shortest_path(self, ai, aj))-2>=min_dis and ((not singletons and ai!=aj) or singletons):
+                        if not self.short.has_key((ai,aj)):
+                            self.short[(ai, aj)] = []
         else:
-            self.pairs = [(p1, p2) for p1, p2 in pairs if len(nx.shortest_path(self, p1, p2))-2>=min_dis]
-        
-    def finalize_network(self,Nfp,C,generate_capacities=True,generate_weights=True, typ_capacities='constant', typ_weights='gauss', file_capacities=None):
-        """
-        Initialize dynamic characteristic for the first time, and compute shortest_path.
-        """
-        if generate_capacities:
-            self.generate_capacities(typ=typ_capacities,C=C, file_capacities=file_capacities)
-        if generate_weights:
-            self.generate_weights(typ=typ_weights)
-        for a in self.airports:
-            self.node[a]['capacity']=100000
-        self.initialize_load(2*(nx.diameter(self)+Nfp))
-        self.compute_shortest_paths(Nfp)
-        print 'Number of nodes:', (len(self.nodes()))
-        
-    def build_H(self): 
-        """
-        Build the DiGraph obect used in the ksp_yen algorithm.
-        """
-        self.H=DiGraph()
-        self.H._data={}
-        for n in self.nodes():
-            self.H.add_node(n)
-        for e in self.edges():
-            self.H.add_edge(e[0],e[1], cost=self[e[0]][e[1]]['weight'])
-            self.H.add_edge(e[1],e[0], cost=self[e[1]][e[0]]['weight'])
-         
-    def initialize_load(self):
-        """
-        Initialize loads, with length given by t_max.
-        Changed in 2.2: keeps in memory only the intervals.
-        Changed in 2.5: t_max is set to 10**6.
-        """
-        for n in self.nodes():
-            self.node[n]['load']=[[0,0],[10**9,0]] # the last one should ALWAYS be (t_max,0.)
-    
-    def clean(self):
-        """
-        Initialize loads, keeping the same length.
-        Changed in 2.2: do only initialization now.
-        """
-       # for n in self.nodes():
-       #     self.node[n]['load']=[0 for i in range(len(self.node[n]['load']))]
-        #n=self.nodes()[0]
-        #t_max=self.node[n]['load'][-1][0]
-        self.initialize_load()
-            
-    def weight_path(self,p): 
-        """
-        Return the weight of the given path.
-        """
-        return sum([self[p[i]][p[i+1]]['weight'] for i in range(len(p)-1)])
-        
-    def compute_shortest_paths(self, Nfp, repetitions = True, n_tries_duplicates=100):
-        """
-        Pre-Build Nfp weighted shortest paths between each pair of airports.
-        Changed in 2.9.2: added repetitions.
-        Modified in 2.6.3: shortest paths were not sorted in output
-        """
-        #self.short={(a,b):self.kshortestPath(a,b,Nfp) for a in self.airports for b in self.airports if a!=b}
-        print 'Computing shortest paths...'
-        Nfp_init = Nfp
-        #paths_additional=0
-        
-        deleted_pairs = []
-        pairs = self.pairs
-        enough_paths = {(a,b):False for (a,b) in pairs if a!=b}
-        #self.short = {(a,b):self.kshortestPath(a, b, Nfp) for (a,b) in self.short.keys()}
+            for (ai,aj) in pairs:
+                 if ((not singletons and ai!=aj) or singletons):
+                    if not self.short.has_key((ai,aj)):
+                        self.short[(ai, aj)] = []
 
-        # if repetitions:
-        #     while False in enough_paths.values():
-        #         self.short = {(a,b):self.kshortestPath(a, b, Nfp) for (a,b) in pairs}
+        for a in airports:
+            #self.node[a]['capacity']=100000                # TODO: check this.
+            self.node[a]['capacity_airport'] = C_airport
 
-        #         for (a,b) in self.short.keys():
-        #             if a!=b:
-        #                 self.short[(a,b)] = [list(vvv) for vvv in set([tuple(vv) for vv in self.short[(a,b)]])][:Nfp_init]
-        #                 self.short[(a,b)] = sorted(self.short[(a,b)], key = lambda p: self.weight_path(p))
-        #                 if not (len(self.short[(a,b)]) < Nfp_init):
-        #                     #print "For airports", a, b, "I don't find enough paths (only",  len(self.short[(a,b)]), ")"
-        #                     enough_paths[(a,b)] = True
-        #         Nfp += 1
-        #         if False in enough_paths.values():
-        #             print 'Not enough paths, doing another round (', Nfp - Nfp_init, 'additional paths).'
-            
-        #         #self.short={(a,b):self.kshortestPath(a, b, Nfp) for (a,b) in self.short.keys()}                
-        # else:
-        #     while False in enough_paths.values():
-        #         self.short = {}
-        #         #pairs = self.pairs
-        #         for (a,b) in pairs:
-        #             if a!=b and enough_paths[(a,b)]:
-        #                 #print 'a, b', a, b
-        #                 paths = self.kshortestPath(a, b, Nfp) # self.short[(a,b)] #Initial set of paths
-        #                 previous_duplicates=1
-        #                 duplicates=[]
-        #                 n_counter=0
-        #                 while len(duplicates)!=previous_duplicates and n_counter<n_tries_duplicates:
-        #                     previous_duplicates=len(duplicates)
-
-        #                     # Shortest paths having duplicates sectors.
-        #                     # print "paths:"
-        #                     # for sp in paths:
-        #                     #     print sp
-        #                     # print "weight 0 769:", self[0][769]['weight']
-        #                     # print "weight 0 769:", self.H[0][769]
-        #                     duplicates = [sp for sp in paths if len(set(sp))<len(sp)]
-        #                     print 'Number of paths having duplicated sectors:', len(duplicates), "over", len(paths)
-                            
-        #                     # If the number of duplicates has changed, compute some more paths.
-        #                     if len(duplicates)!=previous_duplicates:
-        #                          paths = self.kshortestPath(a, b, Nfp + len(duplicates))
-        #                     n_counter+=1
-
-        #                 duplicates = [sp for sp in paths if len(set(sp))<len(sp)]
-        #                 #print len(duplicates), len(paths)
-
-        #                 #paths_init = paths[:]
-        #                 for path in duplicates:
-        #                     paths.remove(path)
-
-        #                 self.short[(a,b)]=paths[:]
-
-        #                 #print self.short[(a,b)]
-
-        #                 try:
-        #                     assert len(self.short[(a,b)])==Nfp
-        #                 except AssertionError:
-        #                     #print 'a:', a, 'b:', b, 'len(self.short[(a,b)]):', len(self.short[(a,b)])
-        #                     print "kspyen can't find enough paths (only " + str(len(self.short[(a,b)])) + ')', "for the pair", a, b, "; I delete this pair."
-        #                     print 'Number of duplicates:', len(duplicates)
-        #                     #print 'Number of paths with duplicates:', len(paths_init)
-        #                     deleted_pairs.append((a,b))
-        #                     del self.short[(a,b)]
-        #                     #self.pairs = list(self.pairs)
-        #                 except:
-        #                     raise
-
-        #         #enough_paths=True
-        #         # Detects if two paths are exactly the same.
-        #         for (a,b) in self.short.keys():
-        #             if a!=b:
-        #                 self.short[(a,b)] = [list(vvv) for vvv in set([tuple(vv) for vv in self.short[(a,b)]])][:Nfp_init]
-        #                 self.short[(a,b)] = sorted(self.short[(a,b)], key = lambda p: self.weight_path(p))
-        #                 if not (len(self.short[(a,b)]) < Nfp_init):
-        #                     #print "For airports", a, b, "I don't find enough paths (only",  len(self.short[(a,b)]), ")"
-        #                     enough_paths[(a,b)] = True
-        #         #paths_additional += 1
-        #         Nfp += 1
-        #         if False in enough_paths.values():
-        #             print 'Not enough paths, doing another round (', Nfp - Nfp_init, 'additional paths).'
-
-        while False in enough_paths.values():
-            if repetitions:
-                #self.short={(a,b):self.kshortestPath(a, b, Nfp) for (a,b) in self.short.keys()}
-                self.short = {(a,b):self.kshortestPath(a, b, Nfp) for (a,b) in self.pairs}
-            else:
-                self.short = {}
-                pairs = self.pairs
-                for (a,b) in pairs:
-                    if a!=b and not enough_paths[(a,b)]:
-                        #print 'a, b', a, b
-                        paths = self.kshortestPath(a, b, Nfp) # self.short[(a,b)] #Initial set of paths
-                        previous_duplicates=1
-                        duplicates=[]
-                        n_counter=0
-                        while len(duplicates)!=previous_duplicates and n_counter<n_tries_duplicates:
-                            previous_duplicates=len(duplicates)
-
-                            # Shortest paths having duplicates sectors.
-                            # print "paths:"
-                            # for sp in paths:
-                            #     print sp
-                            # print "weight 0 769:", self[0][769]['weight']
-                            # print "weight 0 769:", self.H[0][769]
-                            duplicates = [sp for sp in paths if len(set(sp))<len(sp)]
-                            print 'Number of paths having duplicated sectors:', len(duplicates), "over", len(paths)
-                            
-                            # If the number of duplicates has changed, compute some more paths.
-                            if len(duplicates)!=previous_duplicates:
-                                 paths = self.kshortestPath(a, b, Nfp + len(duplicates))
-                            n_counter+=1
-
-                        duplicates = [sp for sp in paths if len(set(sp))<len(sp)]
-                        #print len(duplicates), len(paths)
-
-                        #paths_init = paths[:]
-                        for path in duplicates:
-                            paths.remove(path)
-
-                        self.short[(a,b)]=paths[:]
-
-                        #print self.short[(a,b)]
-
-                        try:
-                            assert len(self.short[(a,b)])==Nfp
-                        except AssertionError:
-                            #print 'a:', a, 'b:', b, 'len(self.short[(a,b)]):', len(self.short[(a,b)])
-                            print "kspyen can't find enough paths (only " + str(len(self.short[(a,b)])) + ')', "for the pair", a, b, "; I delete this pair."
-                            print 'Number of duplicates:', len(duplicates)
-                            #print 'Number of paths with duplicates:', len(paths_init)
-                            deleted_pairs.append((a,b))
-                            del self.short[(a,b)]
-                            #self.pairs = list(self.pairs)
-                        except:
-                            raise
-
-            #enough_paths=True
-            for (a,b) in self.short.keys():
-                if a!=b:
-                    self.short[(a,b)] = [list(vvv) for vvv in set([tuple(vv) for vv in self.short[(a,b)]])][:Nfp_init]
-                    self.short[(a,b)] = sorted(self.short[(a,b)], key = lambda p: self.weight_path(p))
-                    if not (len(self.short[(a,b)]) < Nfp_init):
-                        #print "For airports", a, b, "I don't find enough paths (only",  len(self.short[(a,b)]), ")"
-                        enough_paths[(a,b)] = True
-            #paths_additional += 1
-            Nfp += 1
-            if False in enough_paths.values():
-                print 'Not enough paths, doing another round (', Nfp - Nfp_init, 'additional paths).'
-
-        self.pairs = self.short.keys()
-
-    def kshortestPath(self,i,j,k): 
-        """
-        Return the k weighted shortest paths on the network. Uses the DiGraph.
-        Changed in 2.6.3: the index of the loop was i too!
-        """
-        spath = [a['path'] for a in  ksp_yen(self.H, i, j, k)]
-        spath=sorted(spath, key=lambda a:self.weight_path(a))
-        spath_new, ii = [], 0
-        while ii<len(spath): # Not sure what this loop is doing...
-            w_old=self.weight_path(spath[ii])
-            a=[spath[ii][:]]
-            ii+=1
-            while ii<len(spath) and abs(self.weight_path(spath[ii]) - w_old)<10**(-8.):
-                a.append(spath[ii][:])
-                ii+=1
-            #shuffle(a)
-            spath_new+=a[:]
-
-        return spath_new
-        
-    def overlapSP(self):
-        """
-        Compute the overkap between the shortest of the network.
-        """
-        pairs=[(i,j) for i in self.nodes() for j in self.nodes() if i!=j] 
-        SP=[]
-        for p in pairs:
-                SP.append([sp for sp in nx.all_shortest_paths(self,source=p[0],target=p[1])])
-        LenOver=[]
-        for path in SP:
-            if len(path)!=1:
-                LenOver.append([(len(a),len(np.intersect1d(a,b))-2) for a in path for b in path if a!=b])
-                #For each pair of vertices connected by more than 1 shortest path, a list of tuples is stored in OverLen;
-                #the first element of each tuple is the overlap between the paths 
-                #(computed as number of common nodes different from the starting and the ending one),
-                #the second one is the length of the path.
-        FlatLO=np.array(sorted([item for sublist in LenOver for item in sublist]))    
-        #this instruction reduce OverLen from a "list of lists of tuples"
-        #to a "list of tuples", i.e. from [[(),(),...],[(),(),...],...]
-        #to [(),(),...], and sort the list by the first element of the
-        #tuples (path length).
-        Lengths=[]
-        for tu in FlatLO:
-            Lengths.append(tu[0])
-        Lmax=max(Lengths)
-        Lmin=min(Lengths)
-        AverO=[]
-        StdO=[]
-        L=[]
-        for i in range(Lmin,Lmax+1):
-            r_indices=np.nonzero(FlatLO[:,0]==i)
-            selected=FlatLO[r_indices,1]
-            AverO.append(np.mean(selected))
-            StdO.append(np.std(selected))
-            L.append(i)
-        return (L,AverO,StdO),Lmin,Lmax
-        
-    def sector_loading(self,flight,storymode=False):
-        """
-        Used by netman, tries to fill the flight in the network, with one of 
-        its flight plans. The rejection of the flights is kept in memory, as
-        well as the first sector overloaded.
-        Changed in 2.2: using intervals.
-        """
-        i=0
-        found=False
-        while i<len(flight.FPs) and not found:
-            fp=flight.FPs[i]
-            self.compute_flight_times(fp)
-            path, times=fp.p, fp.times
-
-            if storymode:
-                print "     FP no", i, "tries to be allocated with trajectory (sectors):"
-                print fp.p
-                print "and crossing times:"
-                print fp.times
-
-            j=0
-            try:
-                while j<len(path) and not self.overload_capacity(path[j],(times[j],times[j+1])):#and self.node[path[j]]['load'][j+time] + 1 <= self.node[path[j]]['capacity']:
-                    j+=1 
-            except:
-                print path, times
-                raise
-    
-            overloaded=j<len(path)
-            fp.accepted=not overloaded
-
-            if storymode:
-                print "     FP has been accepted:", fp.accepted
-                if not fp.accepted:
-                    if overloaded: 
-                        print "     because sector", path[j], "was full."
-                    # if source_overload:
-                    #     print "     because source airport was full."
-                    #     print G.node[path[0]]['load_airport']
-                    #     print G.node[path[0]]['capacity_airport']
-                    # if desetination_overload:
-                    #     print "     because destination airport was full."
-
-            
-            if not overloaded:
-                self.allocate(fp)
-                flight.fp_selected=fp
-                found=True
-            else:
-                fp.bottleneck=path[j]
-                
-            i+=1 
-        
-        if not found:
-            flight.fp_selected=None
-  
-    def compute_flight_times(self,fp):
-        """
-        Changed in 2.8: times computed with the navpoint network.
-        """
-        ints=[0.]*(len(fp.p)+1)
-        ints[0]=fp.t
-        road=fp.t
-        for i in range(1,len(fp.p)):
-            w=self[fp.p[i-1]][fp.p[i]]['weight']
-            ints[i]=road + w/2.
-            road+=w
-        ints[len(fp.p)]=road        
-        fp.times=ints
-        
-    def overload_capacity(self,n,(t1,t2)):
-        """
-        Check if the sector is overloading without actually building the new set
-        of intervals.
-        """
-        ints=np.array([p[0] for p in self.node[n]['load']])
-        
-        caps=np.array([p[1] for p in self.node[n]['load']])
-        i1=max(0,list(ints>=t1).index(True)-1)
-        #try:
-        i2=list(ints>=t2).index(True)
-       # except:
-       #     print t2
-       #     print ints
-       #     raise
-        
-        pouet=np.array([caps[i]+1 for i in range(i1,i2)])
-        
-        return len(pouet[pouet>self.node[n]['capacity']])>0
-        
     def allocate(self,fp):
         """
         Fill the network with the given flight plan.
+
+        TO REMOVE
         """
         path,times=fp.p,fp.times
         for i,n in enumerate(path):
@@ -699,10 +233,327 @@ class Net(nx.Graph):
                 i2+=1
             for k in range(i1,i2):
                 self.node[n]['load'][k][1]+=1
-                
+
+    def basic_statistics(self, rep='.', name=None):
+        """
+        Computes basic stats on degree, weights and capacities. 
+
+        Parameters
+        ----------
+        rep : string, optional
+            directory in which the stats are saved.
+        name : string, optional
+            name of the file (without extension).
+
+        Notes
+        -----
+        TODO: expand this.
+        Changed in 2.6.4: Taken from Model 2 (unchanged)
+
+        """
+        if name==None:
+            name = self.name
+
+        os.system('mkdir -p ' + rep)
+        print 'basic_statistics', join(rep, name + '_basic_stats_net.txt')
+        with open(join(rep, name + '_basic_stats_net.txt'), 'w') as f:
+            print >>f, 'Mean/std degree:', np.mean([self.degree(n) for n in self.nodes()]), np.std([self.degree(n) for n in self.nodes()])
+            print >>f, 'Mean/std weight:', np.mean([self[e[0]][e[1]]['weight'] for e in self.edges()]), np.std([self[e[0]][e[1]]['weight'] for e in self.edges()])
+            print >>f, 'Mean/std capacity:', np.mean([self.node[n]['capacity'] for n in self.nodes() if not n in self.airports]),\
+                np.std([self.node[n]['capacity'] for n in self.nodes() if not n in self.airports])
+        
+    def build(self, N, Gtype='D', mean_degree=6, prelist=[], put_nodes_at_corners=False):
+        """
+        Build a graph of the given type, nodes, edges.
+        Essentially gathers build_nodes and build_net methods and add the possibility 
+        of building a simple triangular network (not sure it is up to date though).
+
+        Parameters
+        ----------
+        N : int
+            Number of nodes to produce.
+        Gtype : string, 'D', 'E', or 'T'
+            type of graph to be generated. 'D' generates a dealunay triangulation 
+            which in particular is planar and has the highest degree possible for a planar 
+            graph. 'E' generates an Erdos-Renyi graph. 'T' builds a triangular network
+        mean_degree : float
+            mean degree for the Erdos-Renyi graph.
+        prelist : list of 2-tuples, optional
+            Coordinates of nodes to add to the nodes previously generated
+        put_nodes_at_corners : boolean, optional
+            if True, put a nodes at each corner for the 1x1 square
+
+        Notes
+        -----
+        Changed in 2.6.4: taken and adapted from Model 2.
+
+        """
+
+        print 'Building random network of type', Gtype
+        
+        if Gtype=='D' or Gtype=='E':
+            self.build_nodes(N, prelist=prelist, put_nodes_at_corners=put_nodes_at_corners)
+            self.build_net(Gtype=Gtype, mean_degree=mean_degree)  
+        elif Gtype=='T':
+            xAxesNodes = np.sqrt(N/float(1.4))
+            self = build_triangular(xAxesNodes)  
+    
+    def build_H(self): 
+        """
+        Build the DiGraph object used in the ksp_yen algorithm.
+        """
+        self.H = DiGraph()
+        self.H._data = {}
+        for n in self.nodes():
+            self.H.add_node(n)
+        for e in self.edges():
+            self.H.add_edge(e[0],e[1], cost=self[e[0]][e[1]]['weight'])
+            self.H.add_edge(e[1],e[0], cost=self[e[1]][e[0]]['weight'])
+
+    def build_nodes(self, N, prelist=[], put_nodes_at_corners=False, small=1.e-5):
+        """
+        Add N nodes to the network, with coordinates taken uniformly in a square. 
+        Alternatively, prelist gives the list of coordinates.
+
+        Parameters
+        ----------
+        N : int
+            Number of nodes to produce
+        prelist : list of 2-tuples, optional
+            Coordinates of nodes to add to the nodes previously generated
+        put_nodes_at_corners : boolean, optional
+            if True, put a nodes at each corner for the 1x1 square
+        small : float, optional
+            Used to be sure that the nodes in the corner are strictly within the
+            square
+
+        Notes
+        -----
+        New in 2.6.4: taken from Model 2 (unchanged)
+        (From Model 2)
+        Remark: the network should not have any nodes yet.
+        New in 2.8.2
+
+        """
+        for i in range(N):
+            self.add_node(i,coord=[uniform(-1.,1.),uniform(-1.,1.)])  
+        for j,cc in enumerate(prelist):
+            self.add_node(N+j,coord=cc)
+        if put_nodes_at_corners:
+            self.add_node(N+len(prelist), coord=[1.-small, 1.-small])
+            self.add_node(N+len(prelist)+1, coord=[-1.+small, 1.-small])
+            self.add_node(N+len(prelist)+2, coord=[-1.+small, -1.+small])
+            self.add_node(N+len(prelist)+3, coord=[1.-small, -1.+small])
+
+    def build_net(self, Gtype='D', mean_degree=6):
+        """
+        Build edges, based on Delaunay triangulation or Erdos-Renyi graph. 
+        No weight is computed at this point.
+
+        Parameters
+        ----------
+        Gtype : string, 'D' or 'E'
+            type of graph to be generated. 'D' generates a dealunay triangulation 
+            which in particular is planar and has the highest degree possible for a planar 
+            graph. 'E' generates an Erdos-Renyi graph.
+        mean_degree : float
+            mean degree for the Erdos-Renyi graph.
+
+        Notes
+        -----
+        New in 2.6.4: taken from Model 2 (unchanged)
+
+        Changed in 2.9.10: removed argument N.
+
+        """
+
+        if Gtype=='D':
+            x,y =  np.array([self.node[n]['coord'][0] for n in self.nodes()]),np.array([self.node[n]['coord'][1] for n in self.nodes()])   
+            cens, edg, tri, neig = triang.delaunay(x,y)
+            for p in tri:
+                self.add_edge(p[0],p[1])
+                self.add_edge(p[1],p[2])
+                self.add_edge(p[2],p[0])
+        elif Gtype=='E':  
+            N = len(self.nodes())
+            prob = mean_degree/float(N-1) # <k> = (N-1)p - 6 is the mean degree in Delaunay triangulation.
+            for n in self.nodes():
+                for m in self.nodes():
+                    if n>m:
+                        if np.random.rand()<=prob:
+                            self.add_edge(n,m)
+
+    def capacities(self):
+        return {n:self.node[n]['capacity'] for n in self.nodes()}
+
+    def compute_flight_times(self,fp):
+        """
+        
+        Changed in 2.8: times computed with the navpoint network.
+        TO REMOVE
+
+        """
+        
+        ints=[0.]*(len(fp.p)+1)
+        ints[0]=fp.t
+        road=fp.t
+        for i in range(1,len(fp.p)):
+            w=self[fp.p[i-1]][fp.p[i]]['weight']
+            ints[i]=road + w/2.
+            road+=w
+        ints[len(fp.p)]=road        
+        fp.times=ints
+
+    def compute_shortest_paths(self, Nfp, repetitions=True, pairs=[], 
+        verb=1, delete_pairs=True):
+        """
+        Pre-Build Nfp weighted shortest paths between each pair of airports. 
+        If the function dooes not find enough paths, the corresponding source/destination pair can be deleted.
+        
+        Parameters
+        ----------
+        Nfp : int
+            Number of shortest paths to compute between each pair of airports.
+        repetitions : boolean, optional
+            If True, a path can have a given node twice or more. Otherwise, the function makes
+            several iterations, considering longer and longer paths until it finds a path which doesn't have any 
+            repeated sector.
+        use_sector_path : boolean, optional
+            If True, the nav-paths are generated so that the sector paths do not have repeated sectors. Does not 
+            have any effect if repetitions is True.
+        old : boolean, optional
+            Should always be false. Used to compare with previous algorithm of YenKSP.
+        pairs : list of 2-tuples, optional
+            list of origin-destination for which the shortest paths will be computed. If [], all shortest paths
+            will be computed.
+        verb : int, optional
+            verbosity
+        delete_pairs : boolean, optional
+            if True, all pairs for which not enough shortest paths have been found are deleted.
+
+        Notes
+        -----
+        Changed in 2.6.4: taken and adapted from Model 2
+        (From Model 2)
+        Changed in 2.9: added singletons option. Added repetitions options to avoid repeated sectors in paths.
+        Changed in 2.9.4: added procedure to have always 10 distinct paths (in sectors).
+        Changed in 2.9.7: modified the location of the not enough_path loop to speed up the process. Added
+        pairs_to_compute, so that it does not necesseraly recompute every shortest paths.
+        Changed in 2.9.8: Added n_tries in case of use_sector_path.
+        Changed in 2.9.10: added option to remove pairs which do not have enough paths. If disabled, the last paths 
+        is directed until Nfp is reached.
+
+        """
+
+        if pairs==[]:
+            pairs = self.short.keys()[:]
+        
+        deleted_pairs = []
+        if repetitions:
+            for (a,b) in pairs:
+                enough_paths = False
+                Nfp_init = Nfp
+                while not enough_paths:
+                    enough_paths=True
+                    #self.short={(a,b):self.kshortestPath(a, b, Nfp, old=old) for (a,b) in self.short.keys()}
+                    paths = self.kshortestPath(a, b, Nfp)
+                    if len(paths) < Nfp_init:
+                        enough_paths = False
+                self.short[(a,b)] = paths[:]
+                Nfp = Nfp_init
+        else:
+            for it, (a,b) in enumerate(pairs):
+                #print "Shortest path for", (a, b)
+                #if verb:
+                #    counter(it, len(pairs), message='Computing shortest paths...')
+                if a!=b:
+                    enough_paths = False
+                    Nfp_init = Nfp
+                    while not enough_paths:
+                        enough_paths = True
+                        paths = self.kshortestPath(a, b, Nfp) #Initial set of paths
+                        previous_duplicates = 1
+                        duplicates = []
+                        n_tries = 0
+                        while len(duplicates)!=previous_duplicates and n_tries<50:
+                            previous_duplicates = len(duplicates)
+                            duplicates = []
+                            for sp in paths:
+                                if len(np.unique(sp))<len(sp): # Detect if some sectors are duplicated within sp
+                                    duplicates.append(sp)
+
+                            if len(duplicates)!=previous_duplicates: # If the number of duplicates has changed, compute some more paths.
+                                paths = self.kshortestPath(a, b, Nfp+len(duplicates))
+                            n_tries += 1
+
+                        for path in duplicates:
+                            paths.remove(path)
+
+                        try:
+                            try:
+                                assert n_tries<50
+                            except AssertionError:
+                                print "I hit the maximum number of iterations."
+                                raise
+
+                            assert len(paths)==Nfp and len(duplicates)==previous_duplicates
+                            enough_paths=True
+                            paths = [list(vvv) for vvv in set([tuple(vv) for vv in paths])][:Nfp_init]
+                            if len(paths) < Nfp_init:
+                                enough_paths = False
+                                print 'Not enough paths, doing another round (' + str(Nfp +1 - Nfp_init), 'additional path(s)).'
+                            Nfp += 1
+                        except AssertionError:
+                            #print 'a:', a, 'b:', b, 'len(self.short[(a,b)]):', len(self.short[(a,b)])
+                            print "WARNING: kspyen can't find enough paths (only " + str(len(paths)) + ')', "for the pair", a, b,
+                            #print 'Number of duplicates:', len(duplicates)
+                            #print 'Number of duplicates:', len(duplicates)
+                            #print 'Number of paths with duplicates:', len(paths_init)
+                            if delete_pairs:
+                                print "I delete this pair."
+                                deleted_pairs.append((a,b))
+                                del self.short[(a,b)]
+                                break
+                            else:
+                                print
+                                print "I don't take any action and keep in memory the shortest paths,"
+                                print "but you should not use the network with this Nfp. Try to run it"
+                                print "again with a smaller Nfp."
+
+                    Nfp = Nfp_init
+                    if self.short.has_key((a,b)):
+                        self.short[(a,b)] = paths[:]      
+
+                    if not delete_pairs:
+                        if len(self.short[(a,b)])<Nfp:
+                            print  "Pair", (a,b), "do not have enough path, I duplicate the last one..."
+                        if len(self.short[(a,b)])>Nfp:
+                            # Should only happen when the maximum number of iteration has been hit
+                            self.short[(a,b)] = self.short[(a,b)][:10]
+                        while len(self.short[(a,b)])<Nfp:
+                            self.short[(a,b)].append(self.short[(a,b)][-1])
+                        assert len(self.short[(a,b)])==Nfp
+                else:
+                    self.short[(a,b)] = [[a] for i in range(Nfp)]
+
+    def connections(self):
+        """
+        Notes
+        -----
+        New in 2.6.2: taken from Model 2 (unchanged)
+
+        (From Model 2)
+        New in 2.9.8: returns the possible connections between airports.
+        
+        """
+        
+        return self.short.keys()
+
     def deallocate(self,fp):
         """
         New in 2.5: used to deallocate a flight plan not legit anymore (because one sector has been shutdown).
+        
+        TO REMOVE
         """
         
         path,times=fp.p,fp.times
@@ -733,67 +584,341 @@ class Net(nx.Graph):
                 raise
             
             #print 'load after', self.node[n]['load']
- 
-    def basic_statistics(self,rep='.'):
-        os.system('mkdir -p ' + rep)
-        f=open(rep + '/basic_stats_net.txt','w')
-        print >>f, 'Mean/std degree:', np.mean([self.degree(n) for n in self.nodes()]), np.std([self.degree(n) for n in self.nodes()])
-        print >>f, 'Mean/std weight:', np.mean([self[e[0]][e[1]]['weight'] for e in self.edges()]), np.std([self[e[0]][e[1]]['weight'] for e in self.edges()])
-        print >>f, 'Mean/std capacity:', np.mean([self.node[n]['capacity'] for n in self.nodes() if not n in self.airports]),\
-            np.std([self.node[n]['capacity'] for n in self.nodes() if not n in self.airports])
-        #print >>f, 'Mean/std load:', np.mean([np.mean(self.node[n]['load']) for n in self.nodes()]), np.std([np.mean(self.node[n]['load']) for n in self.nodes()])
-        f.close()
+
+    def fix_airports(self, *args, **kwargs):
+        """
+        Used to reset the airports and then add the new airports.
+
+        Notes
+        -----
+        Changed in 2.6.4: taken from Model 2 (unchanged).
+
+        """
         
+        if hasattr(self, "airports"):
+            self.airports = []
+            self.short = {}
+
+        self.add_airports(*args, **kwargs)
+
+    def generate_airports(self, nairports, min_dis, C_airport=10):
+        """
+        Generate nairports airports. Build the accessible pairs of airports for this network
+        with a  minimum distance min_dis.
+
+        Notes
+        -----
+        Changed in 2.6.4: updated with stuff from Model 2
+        
+        """
+
+        self.airports = sample(self.nodes(),nairports)
+        self.short = {(ai,aj):[] for ai in self.airports for aj in self.airports if len(nx.shortest_path(self, ai, aj))-2>=min_dis}
+        
+        for a in self.airports:
+            self.node[a]['capacity']=100000                 # TODO: check this.
+            self.node[a]['capacity_airport'] = C_airport
+
+    def generate_weights(self,typ='gauss',par=[1.,0.01],values=[]):
+        """
+        Generates weights with a gaussian distribution or given by the euclidean distance
+        between nodes, tuned so that the average matches the one given as argument.
+
+        Parameters
+        ----------
+        input typ: str
+            should be 'gauss' or 'coords'. The first produces gaussian weights with mean 
+            given by the first element of par and the deviation given by the second element
+            of par. 'coords' computes the euclideian distance between nodes (based on key 
+            coord) and adjust it so the average weight over all edges matches the float given
+            by par.
+        input par: list or float
+            If typ is 'gauss', gives the mean and deviation. Otherwise, should be a float giving 
+            the average weight.
+
+        Notes
+        -----
+        Changed in 2.6.4: taken from Model 2 (unchanged).
+
+        """
+
+        self.typ_weights, self.par_weights=typ, par
+        if typ=='gauss':
+            mu = par[0]
+            sigma = par[1]
+            for e in self.edges():
+                self[e[0]][e[1]]['weight'] = max(gauss(mu, sigma),0.00001)
+        elif typ=='coords':
+            for e in self.edges():
+                #self[e[0]][e[1]]['weight']=sqrt((self.node[e[0]]['coord'][0] - self.node[e[1]]['coord'][0])**2 +(self.node[e[0]]['coord'][1] - self.node[e[1]]['coord'][1])**2)
+                self[e[0]][e[1]]['weight'] = np.linalg.norm(np.array(self.node[e[0]]['coord']) - np.array(self.node[e[1]]['coord']))
+            avg_weight = np.mean([self[e[0]][e[1]]['weight'] for e in self.edges()])
+            for e in self.edges():
+                self[e[0]][e[1]]['weight'] = par*self[e[0]][e[1]]['weight']/avg_weight
+        self.typ_weights = typ
+        self.weighted = True
+            
+    def generate_capacities(self, typ='constant', C=5, par=[1]):
+        """
+        Generates capacities with different distributions.
+        If typ is 'constant', all nodes have the same capacity, given by C.
+        If typ is 'gauss', the capacities are taken from a normal distribution with mean C
+        and standard deviation par[0]
+        If typ is 'uniform', the capacities are taken from a uniform distribution, with 
+        bounds C-par[0]/2.,C+par[0]/2.
+        If typ is 'areas', the capacities are proportional to the square root of the area of 
+        the sector, with the proportionality factor set so at to have a mean close to C. 
+        This requires that each node has a key 'area'.
+        If typ is 'lognormal', the capacities are taken from a lognormal distribution.
+
+        Capacities are integers, minimum 1.
+
+        Parameters
+        ----------
+        typ : string
+            type of distribution, see description.
+        C : int
+            main parameter of distribution, see description.
+        par : list of int or float
+            other parameters, see description.
+
+        Notes
+        ----- 
+        Changed in 2.6.4: taken from Model 2 (unchanged).
+
+        (From Model 2)
+        New in 2.7: added lognormal and areas.
+        Changed in 2.9.8: removed "manual"
+
+        """
+
+        assert typ in ['constant', 'gauss', 'uniform', 'lognormal', 'areas']
+        self.C, self.typ_capacities, self.par_capacities = C, typ, par
+        if typ=='constant':
+            for n in self.nodes():
+                self.node[n]['capacity'] = C
+        elif typ=='gauss':
+            for n in self.nodes():
+                self.node[n]['capacity'] = max(1, int(gauss(C,par[0])))
+        elif typ=='uniform':
+            for n in self.nodes():
+                self.node[n]['capacity'] = max(1, int(uniform(C-par[0]/2.,C+par[0]/2.)))
+        elif typ=='lognormal':
+            for n in self.nodes():
+                self.node[n]['capacity'] = max(1, int(lognormal(log(C),par[0])))
+        elif typ=='areas':
+            if par[0]=='sqrt':
+                area_avg = np.mean([sqrt(self.node[n]['area']) for n in self.nodes()])
+                alpha = C/area_avg
+                for n in self.nodes():
+                    self.node[n]['capacity'] = max(1, int(alpha*sqrt(self.node[n]['area'])))
+
+    def get_airports(self):
+        """
+        Notes
+        -----
+        New in 2.6.4: taken from Model 2(unchanged)
+        (From Model 2)
+        New in 2.9.8: returns the airports based on connections.
+        
+        """
+        
+        return set([e for ee in self.connections() for e in ee])
+
+    def import_from(self, G, numberize=False, verb=False):
+        """
+        Used to import the data of an already existing graph (networkx) in a Net obect.
+        Weights are conserved. 
+
+        Parameters
+        ----------
+        G : a networkx object
+            all keys attached to nodes will be preserved. Network needs to be completely weighted, 
+            or none at all.
+        numberize : boolean, optional
+            if True, nodes of G will not be used as is, but an index will be generated instead.
+            The real name in stored in the 'name' key of the node. A dictionnary idx_nodes is 
+            also attached to the network for easy (reverse) mapping.
+        verb : boolean, optional
+            verbosity.
+
+        Notes
+        -----
+        Changed in 2.6.4: taken from Model 2 (unchanged).
+        (From Model 2)
+        Changed in 2.9: included case where G is empty.
+        TODO: preserve attributes of edges too.
+
+        """
+        
+        if verb:
+            print 'Importing network...'
+
+        if len(G.nodes())!=0:
+            if not numberize:
+                self.add_nodes_from(G.nodes(data=True))
+                if len(G.edges())>0:
+                    e1, e2 = G.edges()[0]
+                    if 'weight' in G[e1][e2].keys():
+                        self.add_weighted_edges_from([(e[0],e[1], G[e[0]][e[1]]['weight']) for e in G.edges()])
+                    else:
+                        self.add_weighted_edges_from([(e[0],e[1], 1.) for e in G.edges()])
+            else:
+                self.idx_nodes={s:i for i,s in enumerate(G.nodes())}
+                for n in G.nodes():
+                    self.add_node(self.idx_nodes[n], name=n, **G.node[n])
+
+                e1, e2 = G.edges()[0]
+                if len(G.edges())>0:
+                    if 'weight' in G[e1][e2].keys():
+                        for e in G.edges():
+                            e1 = self.idx_nodes[e[0]]
+                            e2 = self.idx_nodes[e[1]]
+                            self.add_edge(e1, e2, weight=G[e1][e2]['weight'])
+                    else:
+                        for e in G.edges():
+                            self.add_edge(self.idx_nodes[e[0]], self.idx_nodes[e[1]], weight=1.)
+
+            if len(self.edges())>0:
+                e1 = self.edges()[0]
+                e2 = self.edges()[1]
+                self.weighted = not (self[e1[0]][e1[1]]['weight']==self[e2[0]][e2[1]]['weight']==1.)
+            else:
+                print "Network has no edge!"
+                self.weighted = False
+
+            if verb:
+                if self.weighted:
+                    print 'Network was found weighted'
+                else:
+                    print 'Network was found NOT weighted'
+                    if len(self.edges())>0:
+                        print 'Example:', self[e1[0]][e1[1]]['weight']     
+        else:
+            print 'Network was found empty!'   
+
+    def initialize_load(self):
+        """
+        Initialize loads, with length given by t_max.
+        Changed in 2.2: keeps in memory only the intervals.
+        Changed in 2.5: t_max is set to 10**6.
+
+        TO REMOVE.
+        """
+        for n in self.nodes():
+            self.node[n]['load']=[[0,0],[10**9,0]] # the last one should ALWAYS be (t_max,0.)
+
+    def kshortestPath(self, i, j, k): 
+        """
+        Return the k weighted shortest paths on the network thanks to YenKSP algorithm. Uses the DiGraph,
+        computed by build_H.
+
+        Parameters
+        ----------
+        i : int
+            origin
+        j : int
+            destination
+        k : int
+            Number of shortest paths to compute
+
+
+        Returns
+        -------
+        spath_new: list
+            list of the 
+
+        Notes
+        -----
+        Changed in 2.6.3: the index of the loop was i too!
+        TODO: See what is this fucking loop.
+
+        """
+        
+        # Compute the k-shortest paths with Yen-KSP algorithm
+        spath = [a['path'] for a in  ksp_yen(self.H, i, j, k)]
+        
+        # Sort the paths by increasing (weighted) length
+        spath = sorted(spath, key=lambda a:self.weight_path(a))
+        
+        # Not sure what this loop is doing...
+        spath_new, ii = [], 0
+        while ii<len(spath): 
+            w_old = self.weight_path(spath[ii])
+            a = [spath[ii][:]]
+            ii += 1
+            while ii<len(spath) and abs(self.weight_path(spath[ii]) - w_old)<10**(-8.):
+                a.append(spath[ii][:])
+                ii += 1
+            #shuffle(a)
+            spath_new += a[:]
+
+        return spath_new
+    
+    def overload_capacity(self,n,(t1,t2)):
+        """
+        Check if the sector is overloading without actually building the new set
+        of intervals.
+
+        TO REMOVE.
+        """
+        ints=np.array([p[0] for p in self.node[n]['load']])
+        
+        caps=np.array([p[1] for p in self.node[n]['load']])
+        i1=max(0,list(ints>=t1).index(True)-1)
+        #try:
+        i2=list(ints>=t2).index(True)
+       # except:
+       #     print t2
+       #     print ints
+       #     raise
+        
+        pouet=np.array([caps[i]+1 for i in range(i1,i2)])
+        
+        return len(pouet[pouet>self.node[n]['capacity']])>0
+
     def shut_sector(self,n):
         for v in nx.neighbors(self,n):
             self[n][v]['weight']=10**6
+
+    def weight_path(self,p): 
+        """
+        Return the weight of the given path.
+        """
+        return sum([self[p[i]][p[i+1]]['weight'] for i in range(len(p)-1)])
         
-    def reduce_flights(self):
-        print 'Reducing flights...'
-        fl = self.flights_selected[:]
-        for f in fl:
-            idx_s = f['sec_path'][0] # self.G.idx_sectors[source]
-            idx_d = f['sec_path'][-1] # self.G.idx_sectors[destination]
-            if not (idx_s in self.airports and idx_d in self.airports and (idx_s, idx_d) in self.pairs):    
-                print "I do" + (not idx_s in self.airports)*' not', " find", idx_s, ", I do" + (not idx_d in self.airports)*' not', " find", idx_d,\
-                 'and the couple is' + (not (idx_s, idx_d) in self.pairs)*' not', ' in pairs.'
-                print 'I delete this flight from the flights_selected list.'
-                self.flights_selected.remove(f)
-        
-    def capacities(self):
-        return {n:self.node[n]['capacity'] for n in self.nodes()}
 
 def utility(par,Lsp,t0sp,L,t0):
 
     (alpha,betha1,betha2)=par
     
     #"""
-#the imputs of this function are all supposed to be NumPy arrays
-#    
-#Call: U=UTILITY(ALPHA,BETHA1,BETHA2,LSP,T0SP,L,T0);
-#the function utility.m computes the utility function value, comparing two
-#paths on a graph;
-#
-#INPUTS
-#
-#alpha, betha1, betha2 -> empirically assigned weight parameters,
-#ranging from 0 to 1;
-#
-#Lsp -> length of the shortest path;
-#
-#t0sp -> departure time of the motion along the shortest path;
-#
-#L -> length of the path which one wants to compare to the shortest
-#one;
-#
-#t0 -> depature time of the motion on the path used in the
-#coparison with the shortes one;
-#
-#OUTPUT
-#
-#U -> is the value of the utility function for the given choise of paths;
-#
-#"""
+    #the imputs of this function are all supposed to be NumPy arrays
+    #    
+    #Call: U=UTILITY(ALPHA,BETHA1,BETHA2,LSP,T0SP,L,T0);
+    #the function utility.m computes the utility function value, comparing two
+    #paths on a graph;
+    #
+    #INPUTS
+    #
+    #alpha, betha1, betha2 -> empirically assigned weight parameters,
+    #ranging from 0 to 1;
+    #
+    #Lsp -> length of the shortest path;
+    #
+    #t0sp -> departure time of the motion along the shortest path;
+    #
+    #L -> length of the path which one wants to compare to the shortest
+    #one;
+    #
+    #t0 -> depature time of the motion on the path used in the
+    #coparison with the shortes one;
+    #
+    #OUTPUT
+    #
+    #U -> is the value of the utility function for the given choise of paths;
+    #
+    #"""
     
     return np.dot(alpha,L)+np.dot(betha1,np.absolute(t0+L-(t0sp+Lsp)))+np.dot(betha2,np.absolute(t0-t0sp))
     
