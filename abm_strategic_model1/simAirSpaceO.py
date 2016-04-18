@@ -6,10 +6,6 @@ import sys
 sys.path.insert(1, '..')
 sys.path.insert(1, '../libs/YenKSP')
 
-#import sys
-#from paths import path_ksp
-#sys.path.insert(1, path_ksp)
-#sys.path.insert(1,'../Distance')
 import os
 from os.path import join
 
@@ -849,11 +845,11 @@ class Flight:
         uworst = utility(self.par, SP[0][-1], t0sp, SP[-1][-1], t0sp)
                 
         # Compute the cost of all paths which have a cost smaller than uworst 
-        u = [[(cp, t0sp + i*tau, utility(self.par, SP[0][-1], t0sp, c, t0sp + i*tau),p) for p,cp,c in SP] for i in range(self.Nfp)\
+        u = [[(p, t0sp + i*tau, utility(self.par, SP[0][-1], t0sp, c, t0sp + i*tau)) for p ,c in SP] for i in range(self.Nfp)\
             if utility(self.par,SP[0][-1], t0sp, SP[0][-1],t0sp + i*tau)<=uworst]
 
         # Select the Nfp flight plans less costly, ordered by increasing cost.
-        fp = [FlightPlan(a[0][:],a[1],a[2],self.id,a[3][:]) for a in sorted([item for sublist in u for item in sublist], key=lambda a: a[2])[:self.Nfp]]
+        fp = [FlightPlan(a[0][:], a[1], a[2], self.id) for a in sorted([item for sublist in u for item in sublist], key=lambda a: a[2])[:self.Nfp]]
 
         if len(fp)!=self.Nfp:
             raise Exception('Problem: there are', len(fp), 'flights plans whereas there should be', self.Nfp)
@@ -951,7 +947,7 @@ class AirCompany:
         self.na = na
         self.id = Id
         
-    def fill_FPs(self,t0spV, tau, G):
+    def fill_FPs(self,t0spV, tau, G, pairs=[]):
         """
         Fill na flights with Nfp flight plans each, between airports given by pairs.
 
@@ -976,12 +972,6 @@ class AirCompany:
         Changed in 2.9.6: the flight computes the flight plans itself.
 
         """
-
-        try:
-            assigned=sample(self.pairs,self.na)
-        except ValueError:
-            print "self.pairs,self.na", self.pairs,self.na
-            raise
             
         if pairs==[]:
             assigned_airports = sample(self.pairs, self.na) 
