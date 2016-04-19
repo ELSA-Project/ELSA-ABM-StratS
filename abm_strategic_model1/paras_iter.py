@@ -26,7 +26,7 @@ paras_file = 'paras.py'
 paras = _read_paras(paras_file=paras_file) # Import main parameters
 
 if paras['file_net'] == None:
-	fixnetwork=True       				#if fixnetwork='False' a new graph is generated at each iteration.
+	fixnetwork = True       			#if fixnetwork='False' a new graph is generated at each iteration.
 
 # ---------------- Companies ---------------- #
 

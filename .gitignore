@@ -2,6 +2,7 @@ abm_strategic_model1/*.pyc
 abm_strategic_model1/*sublime*
 abm_strategic_model1/my_paras.py
 abm_strategic_model1/my_paras_iter.py
+abm_strategic_model1/my_paras/*
 scripts/*.pyc
 libs/*.pyc
 libs/YenKSP/*.pyc

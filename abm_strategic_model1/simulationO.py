@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import sys
-sys.path.insert(1,'/home/earendil/Documents/ELSA/Modules')
+#sys.path.insert(1,'/home/earendil/Documents/ELSA/Modules')
 from os.path import join as jn
 
 import networkx as nx
@@ -16,16 +16,16 @@ import copy
 from math import ceil
 
 from simAirSpaceO import AirCompany, Network_Manager
-from utilities import draw_network_map
+from utilities import draw_network_map, read_paras
 
 from libs.paths import result_dir
-from libs.general_tools import delay, date_st
+from libs.general_tools import delay, date_st, header, clock_time, draw_network_and_patches
 
 #from tools_airports import map_of_net
 
 import warnings
 
-version = '2.6.4'
+version = '3.0.0'
 main_version = split(version,'.')[0] + '.' + split(version,'.')[1]
 
 if 0:
@@ -57,7 +57,7 @@ class Simulation:
 
         Notes
         -----
-        New in 2.6.4: taken and adapted from Model 2
+        New in 3.0.0: taken and adapted from Model 2
 
         (From Model 2)
         Change in 2.9.3: self.make_times is computed at each simulations.
@@ -100,7 +100,7 @@ class Simulation:
 
         Notes
         -----
-        Changed in 2.6.4: taken from Model 2
+        Changed in 3.0.0: taken from Model 2
 
         (From Model 2)
         Changed in 2.9.6: added the shuffle_departure.
@@ -165,7 +165,7 @@ class Simulation:
 
         Notes
         -----
-        Changed in 2.6.4: taken and adapted from Model 2
+        Changed in 3.0.0: taken and adapted from Model 2
 
         (From Model 2)
         Changed in 2.9: pairs given to ACs are navpoints, not sectors.
@@ -195,7 +195,7 @@ class Simulation:
 
         Notes
         -----
-        Changed in 2.6.4: taken and adapted from Model 2
+        Changed in 3.0.0: taken and adapted from Model 2
 
         (From Model 2)
         New in 2.9.2 
@@ -361,7 +361,7 @@ class Simulation:
 
         Notes
         -----
-        Changed in 2.6.4: taken from Model 2 (unchanged).
+        Changed in 3.0.0: taken from Model 2 (unchanged).
         (From Model 2)
         Changed in 2.9: added departures from data.
         Changed in 2.9.3: added noise.
@@ -404,7 +404,7 @@ class Simulation:
 
         Notes
         -----
-        New in 2.6.4: taken from Model 2 (unchanged).
+        New in 3.0.0: taken from Model 2 (unchanged).
 
         """
         
@@ -435,7 +435,7 @@ def build_path(paras, vers=main_version, in_title=['Nfp', 'tau', 'par', 'ACtot',
 
     Notes
     -----
-    Changed in 2.6.4: taken from Model 2 (unchanged). 
+    Changed in 3.0.0: taken from Model 2 (unchanged). 
     (From Model 2)
     Changed 2.2: is only for single simulations.
     Changed 2.4: takes different departure times patterns. Takes names.
@@ -443,7 +443,7 @@ def build_path(paras, vers=main_version, in_title=['Nfp', 'tau', 'par', 'ACtot',
 
     """
     
-    name = 'Sim_v' + vers + '_' + paras['G'].name
+    name = 'model1/Sim_v' + vers + '_' + paras['G'].name
     name = jn(rep, name)
     
     in_title = list(np.unique(in_title))
@@ -507,7 +507,7 @@ def post_process_queue(queue):
 
     Notes
     -----
-    Changed in 2.6.4: taken from Model 2 (unchanged).
+    Changed in 3.0.0: taken from Model 2 (unchanged).
 
     Every processes between the simulation and the plots should be here.
     Changed in 2.4: add satisfaction, regulated flight & regulated flight plans. On level of iteration added (on par).
@@ -600,7 +600,7 @@ def extract_aggregate_values_on_network(G):
 
     Notes
     -----
-    Changed in 2.6.4: taken from Model 2 (unchanged).
+    Changed in 3.0.0: taken from Model 2 (unchanged).
 
     """
 
@@ -650,7 +650,7 @@ def do_standard((paras, G)):
     
     Notes
     -----
-    New in 2.6.4: taken from Model 2 (unchanged).
+    New in 3.0.0: taken from Model 2 (unchanged).
 
     (From Model 2)
     New in 2.9.2: extracted from average_sim
@@ -703,37 +703,34 @@ if __name__=='__main__':
     Some snippets to view the results.
     ===========================================================================
     """
-    if 0:
+    if 1:
         for n in sim.G.nodes():
             #print n, sim.G.node[n]['capacity'], sim.G.node[n]['load']
             if max(sim.G.node[n]['load']) == sim.G.node[n]['capacity']:
-                #print "Capacity's reached for sector:", n
-                pass
+                print "Capacity's reached for sector:", n
+                #pass
             if max(sim.G.node[n]['load']) > sim.G.node[n]['capacity']:
-                #print "Capacity overreached for sector:", n, '!'
-                pass
+                print "Capacity overreached for sector:", n, '!'
+                #pass
         #draw_network_map(sim.G.G_nav, title=sim.G.G_nav.name, load=False, generated=True,\
         #        airports=True, stack=True, nav=True, queue=sim.queue)
 
-    if 0:
-        trajectories=[]
-        trajectories_nav=[]
+    if 1:
+        trajectories = []
         for f in sim.queue:
             try:
                 trajectories.append(f.FPs[[fpp.accepted for fpp in f.FPs].index(True)].p) 
-                trajectories_nav.append(f.FPs[[fpp.accepted for fpp in f.FPs].index(True)].p_nav) 
             except ValueError:
                 pass
 
-    if 0:
         #  Real trajectories
-        trajectories_real = []
-        for f in sim.G.flights_selected:
-            navpoints = set([sim.G.G_nav.idx_nodes[p[0]] for p in f['route_m1']])
-            if navpoints.issubset(set(sim.G.G_nav.nodes())) and (sim.G.G_nav.idx_nodes[f['route_m1'][0][0]], sim.G.G_nav.idx_nodes[f['route_m1'][-1][0]]) in sim.G.G_nav.short.keys():
-                trajectories_real.append([sim.G.G_nav.idx_nodes[p[0]] for p in f['route_m1']])
+        # trajectories_real = []
+        # for f in sim.G.flights_selected:
+        #     navpoints = set([sim.G.G_nav.idx_nodes[p[0]] for p in f['route_m1']])
+        #     if navpoints.issubset(set(sim.G.G_nav.nodes())) and (sim.G.G_nav.idx_nodes[f['route_m1'][0][0]], sim.G.G_nav.idx_nodes[f['route_m1'][-1][0]]) in sim.G.G_nav.short.keys():
+        #         trajectories_real.append([sim.G.G_nav.idx_nodes[p[0]] for p in f['route_m1']])
 
-        draw_network_and_patches(sim.G, sim.G.G_nav, sim.G.polygons, name='trajectories_nav', flip_axes=True, trajectories=trajectories_nav, trajectories_type='navpoints', rep = sim.rep)
+        draw_network_and_patches(sim.G, None, sim.G.polygons, name='trajectories', flip_axes=True, trajectories=trajectories, trajectories_type='sectors', rep=sim.rep)
         #draw_network_and_patches(sim.G, sim.G.G_nav, sim.G.polygons, name='trajectories_real', flip_axes=True, trajectories=trajectories_real, trajectories_type='navpoints', save = True, rep = build_path(sim.paras), dpi = 500)
 
     if 0:

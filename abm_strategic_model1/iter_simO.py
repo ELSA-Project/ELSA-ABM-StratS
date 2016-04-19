@@ -22,13 +22,15 @@ from multiprocessing import Process, Pipe
 from itertools import izip
 from time import time, gmtime, strftime
 
+from simAirSpaceO import Net
 from simulationO import do_standard, build_path as build_path_single #post_process_queue, extract_aggregate_values_on_queue, extract_aggregate_values_on_network
 from utilities import read_paras_iter
+from prepare_network import soft_infrastructure
 
 from libs.general_tools import yes
 from libs.paths import result_dir
 
-version = '2.6.7'
+version = '3.0.0'
 main_version = split(version,'.')[0] + '.' + split(version,'.')[1]
 
 # This is for parallel computation.
@@ -102,7 +104,7 @@ def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path
     
     Notes
     -----
-    Changed in 2.6.7: taken from Model 2 (unchanged).
+    Changed in 3.0.0: taken from Model 2 (unchanged).
 
     (From Model 2)
     New in 2.6: makes a certain number of iterations (given in paras) and extract the averaged mettrics.
@@ -149,10 +151,21 @@ def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path
 def loop(a, level, parass, thing_to_do=None, **args):
     """
     Generic recursive function to make several levels of iterations.
+   
+    Parameters
+    ----------
+    a : dictionnary, 
+        with keys as parameters to loop on and values as the values on which to loop.
+    level: list,
+        of parameters on which to loop. The first one is the most outer loop, the last
+        one is the most inner loop.
+    
+    Notes
+    -----
     New in 2.6: Makes an arbitrary number of loops
-    a: dictionnary, with keys as parameters to loop on and values as the values on which to loop.
-    level: list of parameters on which to loop. The first one is the most outer loop, the last one is the most inner loop.
+
     """
+
     if level==[]:
         thing_to_do(**args)#(paras, G)
     else:
@@ -169,7 +182,7 @@ def iter_sim(paras, save=1, do=do_standard, build_pat=build_path_average, rep=re
 
     Notes
     -----
-    Changed in 2.6.7: taken from Model 2 (unchanged).
+    Changed in 3.0.0: taken from Model 2 (unchanged).
 
     (From Model 2)
     Changed in 2.9.2: added do and build_pat kwargs.
@@ -193,7 +206,59 @@ def iter_sim(paras, save=1, do=do_standard, build_pat=build_path_average, rep=re
         
     loop({p:paras[p + '_iter'] for p in paras['paras_to_loop']}, paras['paras_to_loop'], \
         paras, thing_to_do=average_sim, paras=paras, G=G, do=do, build_pat=build_pat, save=save, rep=rep)
-            
+
+def change_airports((G, paras_G)):
+    """
+    Used to generate networks with different soft infrastructure but 
+    the same hard infrastructure.
+    """
+
+    soft_infrastructure(G, paras_G)
+    save_name = G.name + '_nairports' + str(paras_G['nairports_sec']) + '_' + str(paras_G['I_iter'])
+
+    # Save 
+    with open(jn(G.rep, save_name) + '.pic','w') as f:
+        pickle.dump(G, f)
+
+def iter_airport_change(paras, G, do=change_airports):
+    """
+
+    Notes
+    -----
+    New in 3.0.0
+    
+    """        
+
+    loop({p:paras[p + '_iter'] for p in paras['paras_to_loop']}, paras['paras_to_loop'], \
+        paras, thing_to_do=produce_several_airports, paras=paras, do=do, G=G)
+
+def produce_several_airports(paras, do=change_airports, G=None):
+    """
+    Used to produce several versions of a network (hard infrastructure is fixed).
+
+    Notes
+    -----
+    New in 3.0.0
+
+    """
+
+    inputs = []
+    for i in range(paras['n_iter']):
+        paras['I_iter'] = i
+        inputs.append((G, paras.copy()))
+
+    start_time = time()
+    if paras['parallel']:
+        parmap(do, inputs)
+    else:
+        for i, a in enumerate(inputs):
+            #sys.stdout.write('\r' + 'Doing simulations...' + str(int(100*(i+1)/float(paras['n_iter']))) + '%')
+            #sys.stdout.flush() 
+            #results_list.append(do(a))
+            do(a)
+        
+    print '... done in', time()-start_time, 's'
+
 if __name__=='__main__':
     """
     Manual entry

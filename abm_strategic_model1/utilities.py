@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import pickle
 import imp
 
-version='2.6.1'
+version='3.0.0'
 
 def draw_network_map(G, title='Network map', queue=[], rep='./',airports=True, load=True,
              generated=False, file_save=None, colors_nodes='b', size=10, dpi=300):
@@ -180,7 +180,6 @@ def draw_network_map_bis(G, title='Network map', trajectories=[], rep='./',airpo
     if show:
         plt.show()
 
-
 def split_coords(G,nodes,r=0.04):
     lines=[]
     for n in G.nodes():
@@ -286,14 +285,16 @@ class Paras(dict):
     Notes
     -----
     'update_priority' and 'to_update' could be merged in an sorted dictionary.
-    New in 2.6.2: taken from Model 2 (unchanged).
+    New in 3.0.0: taken from Model 2 (unchanged).
+    Changed in 3.0.0: initialized with self.update_priority = {}.
 
     """
     
     def __init__(self, dic):
         for k,v in dic.items():
-            self[k]=v
-        self.to_update={}
+            self[k] = v
+        self.to_update = {}
+        self.update_priority = {}
 
     def update(self, name_para, new_value):
         """
@@ -351,8 +352,10 @@ def read_paras(paras_file=None, post_process=True):
 
     Notes
     -----
-    New in 2.6.2: taken from Model 2
+    New in 3.0.0: taken from Model 2
+    
     """
+
     if paras_file==None:
         import my_paras as paras_mod
     else:
@@ -382,8 +385,8 @@ def post_process_paras(paras):
     ##################################################################################
     # This is useful in case of change of parameters (in particular using iter_sim) in
     # order to record the dependencies between variables.
-    update_priority=[]
-    to_update={}
+    update_priority = []
+    to_update = {}
 
     # -------------------- Post-processing -------------------- #
 
@@ -444,7 +447,7 @@ def post_process_paras(paras):
 
     else:
         paras['flows'] = {}
-        paras['times']=[]
+        paras['times'] = []
         if paras['file_times'] != None:
             if paras['departure_times']=='from_data': #TODO
                 with open('times_2010_5_6.pic', 'r') as f:
@@ -517,7 +520,6 @@ def post_process_paras(paras):
 
 
     # ------------ Building paras dictionary ---------- #
-
 
     paras.to_update = to_update
 

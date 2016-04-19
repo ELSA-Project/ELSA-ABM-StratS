@@ -89,13 +89,13 @@ def draw_network_and_patches(G, G_nav, polygons, draw_navpoints_edges=True, \
         for pol in polygons.values():
             patch = PolygonPatch(pol,alpha=0.5, zorder=2)
             ax.add_patch(patch) 
-    if G:
+    if G!=None:
         ax.scatter([G.node[n]['coord'][0] for n in G.nodes()], [G.node[n]['coord'][1] for n in G.nodes()],c='r', marker='s')
         if draw_sectors_edges:
             for e in G.edges():
                 plt.plot([G.node[e[0]]['coord'][0],G.node[e[1]]['coord'][0]],[G.node[e[0]]['coord'][1],G.node[e[1]]['coord'][1]],'k-',lw=0.2)#,lw=width(G[e[0]][e[1]]['weight'],max_wei),zorder=4)
         
-    if G_nav:
+    if G_nav!=None:
         ax.scatter([G_nav.node[n]['coord'][0] for n in G_nav.nodes()], [G_nav.node[n]['coord'][1] for n in G_nav.nodes()],c=[_colors[G_nav.node[n]['sec']%len(_colors)]\
             for n in G_nav.nodes()],marker='o', zorder=6, s=20)
         if draw_navpoints_edges:
@@ -1045,7 +1045,7 @@ def map_of_net(G, colors='r', limits=(0,0,0,0), title='', size_nodes=1., size_ed
 #     artists = ax.scatter(x, y, lw=lw, edgecolor='w', **kwargs) for x, y in data]
 #     return artists
 
-def build_triangular(N):
+def build_triangular(N, x_shift=0., y_shift=0., side=1.):
     """
     build a triangular lattice in a rectangle with N nodes along the abscissa (so 4*N**2 in total)
     
@@ -1063,16 +1063,16 @@ def build_triangular(N):
     
     eps = 10e-6
     G = nx.Graph()   
-    a = 1./float(N+0.5) - eps
+    a = side/float(N+0.5) - eps
     n = 0
     j = 0
-    while j*sqrt(3.)*a <= 1.:
+    while j*sqrt(3.)*a <= side:
         i=0
-        while i*a <= 1.:
-            G.add_node(n, coord=(i*a, j*sqrt(3.)*a)) 
+        while i*a <= side:
+            G.add_node(n, coord=(x_shift + i*a, y_shift+j*sqrt(3.)*a)) 
             n += 1
-            if i*a + a/2 < 1. and  j*sqrt(3.)*a + (sqrt(3.)/2.)*a < 1.:
-                G.add_node(n, coord=(i*a + a/2., j*sqrt(3.)*a + (sqrt(3.)/2.)*a))
+            if i*a + a/2 < side and  j*sqrt(3.)*a + (sqrt(3.)/2.)*a < side:
+                G.add_node(n, coord=(x_shift + i*a + a/2., y_shift + j*sqrt(3.)*a + (sqrt(3.)/2.)*a))
                 n += 1
             i += 1
         j += 1

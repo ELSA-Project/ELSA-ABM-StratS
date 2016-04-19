@@ -13,7 +13,7 @@ if __name__ == '__main__':
 	# Manual tests
 	# os.system('../abm_strategic/iter_simO.py paras_iter_test.py')
 
-	paras = read_paras_iter(paras_file='paras_iter_test.py')
+	paras = read_paras_iter(paras_file='paras_iter_test.py', post_process=False)
 	results = iter_sim(paras, save=1, rep='results_tests/')
 	os.system('rm -r results_tests/')
 	

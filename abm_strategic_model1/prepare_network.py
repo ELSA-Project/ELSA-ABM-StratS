@@ -9,6 +9,7 @@ TODO: Write a builder?
 ===========================================================================
 """
 
+import sys
 from os.path import join
 import os
 
@@ -18,13 +19,16 @@ import numpy as np
 from ast import literal_eval
 from scipy.spatial import Voronoi, voronoi_plot_2d
 from shapely.geometry import Polygon, Point, LineString
+from random import seed
 
 from simAirSpaceO import Net
+from utilities import read_paras
 
+from libs.paths import result_dir
 from libs.general_tools import draw_network_and_patches, voronoi_finite_polygons_2d
 
 
-version='2.6.2'
+version='3.0.0'
 
 def area(p):
     """
@@ -66,7 +70,7 @@ def automatic_name(G, paras_G):
     Notes
     -----
     Note all parameters (keys of paras_G) are taken into account.
-    New in 2.6.2: Taken and adapted from Model 2.
+    New in 3.0.0: Taken and adapted from Model 2.
 
     """
 
@@ -105,7 +109,7 @@ def check_empty_polygon(G, repair = False):
 
     Notes
     -----
-    New in 2.6.2: taken from Model 2 (unchanged)
+    New in 3.0.0: taken from Model 2 (unchanged)
     """
 
     for n in G.nodes():
@@ -145,7 +149,7 @@ def compute_voronoi(G, xlims=(-1., 1.), ylims=(-1., 1.)):
 
     Notes
     -----
-    New in 2.6.2: taken from Model 2 (no changes).
+    New in 3.0.0: taken from Model 2 (no changes).
 
     """
 
@@ -225,7 +229,7 @@ def extract_capacity_from_traffic(G, flights, date=[2010, 5, 6, 0, 0, 0]):
 
     Notes
     -----
-    New in 2.6.2: taken and adapted from Model 2.
+    New in 3.0.0: taken and adapted from Model 2.
     (From Model 2)
     New in 2.9.3: Extract the "capacity", the maximum number of flight per hour, based on the traffic.
     Changed in 2.9.4: added paras_real.
@@ -380,7 +384,7 @@ def give_capacities_and_weights(G, paras_G):
 
     Notes
     -----
-    New in 2.6.2: taken and adapted from model 2
+    New in 3.0.0: taken and adapted from model 2
 
     """
 
@@ -501,7 +505,7 @@ def recompute_neighbors(G):
 
     Notes
     -----
-    New in 2.6.2: taken from Model 2.
+    New in 3.0.0: taken from Model 2.
     (from Model2)
     New in 2.9.6
 
@@ -539,7 +543,7 @@ def reduce_airports_to_existing_nodes(G, pairs, airports):
 
     Notes
     -----
-    New in 2.6.2: taken from model 2.  
+    New in 3.0.0: taken from model 2.  
 
     """
 
@@ -578,34 +582,10 @@ def segments(p):
 """
 ===========================================================================
 """
-
-def prepare_network(paras_G, rep=None, save_name=None, show=True):
+def hard_infrastructure(G, paras_G):
     """
-    Prepare the network of sectors. If no file 
-    containing a networkx object is given via paras_G['net_sec'], it builds a new sector network
-    with paras_G['N'] number of sectors, including one sector at each corner of the square 
-    [0, 1] x [0, 1]. The latter is done to facilitate the voronoi tesselation and the subsequent
-    computation of the boundaries of the sectors.
-
-    Parameters
-    ----------
-    paras_G : dictionary
-        of the parameters for the construction of the network
-
-    Returns
-    -------
-    G : Net object.
-
-    Notes
-    -----
-    New in 2.6.1: the keep_attributes_G
-    Changed in 2.6.2: Some parts taken from model 2.
-    
+    Defines the "hard" infrastructure: position of nodes and definition of edges.
     """
-
-    G = Net()
-    G.type = 'sec' #for sectors
-    G.type_of_net = paras_G['type_of_net']
 
     # Import the network from the paras if given, build a new one otherwise
     if paras_G['net_sec']!=None:
@@ -640,6 +620,13 @@ def prepare_network(paras_G, rep=None, save_name=None, show=True):
     # Make sure that neighbors have a common boundary
     recompute_neighbors(G)
 
+    return G
+
+def soft_infrastructure(G, paras_G):
+    """
+    Defines the "soft" infrastructure: capacity, weights, airports, shortest paths.
+    """
+
     ########### Choose the airports #############
     # `Airports' means all entry and exit points here, not only physical airports.
     print "Choosing the airports..."
@@ -664,13 +651,51 @@ def prepare_network(paras_G, rep=None, save_name=None, show=True):
     
     ############# Computing shortest paths ###########
     G.Nfp = paras_G['Nfp']
-    
-    #G.initialize_load()#2*(nx.diameter(G)+G.Nfp))
-
-    print 'Computing shortest_paths (sectors) ...'
+    print 'Computing shortest_paths ...'
     pairs_deleted = G.compute_shortest_paths(G.Nfp, repetitions=False, delete_pairs=False)   
 
+    G.stamp_airports()
     # CHECK IF AIRPORTS ARE ALRIGHT!
+
+    return G
+
+def prepare_network(paras_G, rep=None, save_name=None, show=True):
+    """
+    Prepare the network of sectors. If no file 
+    containing a networkx object is given via paras_G['net_sec'], it builds a new sector network
+    with paras_G['N'] number of sectors, including one sector at each corner of the square 
+    [0, 1] x [0, 1]. The latter is done to facilitate the voronoi tesselation and the subsequent
+    computation of the boundaries of the sectors.
+
+    Parameters
+    ----------
+    paras_G : dictionary
+        of the parameters for the construction of the network
+
+    Returns
+    -------
+    G : Net object.
+
+    Notes
+    -----
+    New in 2.6.1: the keep_attributes_G
+    Changed in 3.0.0: Some parts taken from model 2.
+    
+    """
+
+    G = Net()
+    G.type = 'sec' #for sectors
+    G.type_of_net = paras_G['type_of_net']
+
+    # --------------------- 'Hard' infrastructure ----------------------- #
+
+    G = hard_infrastructure(G, paras_G)
+
+    # --------------------- 'Soft' infrastructure ----------------------- #
+
+    G = soft_infrastructure(G, paras_G)    
+
+    # ---------------------------- Summary ------------------------------ #
 
     if paras_G['flights_selected']!=None:
         print 'Selected finally', len(paras_G['flights_selected']), "flights."
@@ -684,10 +709,12 @@ def prepare_network(paras_G, rep=None, save_name=None, show=True):
     # Possibly add a cconsistency check between traffic and airports,
     # See Model 2 line around line 1526.
 
-    ##################### Automatic Name #######################
+    # ------------------------------ Finish ------------------------------ #
+
+    # Automatic Name
     long_name = automatic_name(G, paras_G)
 
-    ##################### Manual name #################
+    # Manual name
     if paras_G['name']!='':
         name = paras_G['name']
     else:
@@ -699,6 +726,11 @@ def prepare_network(paras_G, rep=None, save_name=None, show=True):
     if save_name==None:
         save_name = name
 
+    rep = join(rep, save_name)
+    os.system('mkdir -p ' + rep)
+    G.rep = rep
+
+    # Save 
     if rep!=None:
         with open(join(rep, save_name) + '.pic','w') as f:
             pickle.dump(G, f)
@@ -706,23 +738,32 @@ def prepare_network(paras_G, rep=None, save_name=None, show=True):
             with open(join(rep, save_name + '_flights_selected.pic'),'w') as f:
                 pickle.dump(flights_selected, f)
 
+    # Stats
     G.basic_statistics(rep=rep)
-    
-    print 'Network saved as', join(rep, save_name)+'.pic'
-    #show_everything(G.polygons,G,save=True,name=name,show=False)       
-    
-    print 'Done.'
 
+    # Draw network
     if show:
         #if paras_G['flights_selected']==None:
-        draw_network_and_patches(G, None, G.polygons, name=save_name, show=True, flip_axes=True, trajectories=[sp for paths in G.short.values() for sp in paths], rep=rep)
+        draw_network_and_patches(G, None, G.polygons,
+                                     name=save_name, 
+                                     show=True, 
+                                     flip_axes=True, 
+                                     trajectories=[sp for paths in G.short.values() for sp in paths], 
+                                     rep=rep,
+                                     trajectories_type='sectors')
         #else:
         #    trajectories = [[G.G_nav.idx_nodes[p[0]] for p in f['route_m1']] for f in paras_G['flights_selected']]
         #    draw_network_and_patches(G, G.G_nav, G.polygons, name=save_name, show=True, flip_axes=True, trajectories=trajectories, rep=rep)
 
-    return G
+    print 'Network saved in', rep 
+    print 'Done.'
     
+    return G
+
 if  __name__=='__main__':
+    # Canonical run:
+    # python prepare_network.py [path to paras_G] [path for saving files]
+    # If the path of saveing files is omitted, the path is [results_dir]/networks/
     
     if 1:
         # Manual seed
@@ -734,13 +775,15 @@ if  __name__=='__main__':
 
     if len(sys.argv)==1:
         paras_file = 'paras_G.py' 
-        rep = '../example'
-        os.system('mkdir ../example')
+        rep = join(result_dir, 'networks')
+    elif len(sys.argv)==2:
+        paras_file = sys.argv[1]
+        rep = join(result_dir, 'networks')
     elif len(sys.argv)==3:
         paras_file = sys.argv[1]
         rep = sys.argv[2]
     else:
-        raise Exception("You should put 0 argument or 2.")
+        raise Exception("You should put 0, 1 or 2 arguments.")
 
     paras_G = read_paras(paras_file=paras_file, post_process=False)
     

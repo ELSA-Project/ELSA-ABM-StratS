@@ -11,7 +11,7 @@ from math import ceil as _ceil
 
 from utilities import Paras as _Paras
 
-version = '2.6.4' # Based on version 2.9.5 of Model 2.
+version = '3.0.0' # Based on version 2.9.5 of Model 2.
 
 # ============================================================================ #
 # =============================== Parameters ================================= #

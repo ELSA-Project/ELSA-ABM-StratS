@@ -21,7 +21,7 @@ from libs.general_tools import delay, build_triangular
 from libs.YenKSP.graph import DiGraph
 from libs.YenKSP.algorithms import ksp_yen
 
-version='2.6.4'
+version = '3.0.0'
 
 class Network_Manager:
     """
@@ -37,7 +37,7 @@ class Network_Manager:
 
     Notes
     -----
-    New in 2.6.4: taken and adapted from Model 2
+    New in 3.0.0: taken and adapted from Model 2
 
     (From Model 2)
     New in 2.9.2: gather methods coming from class Net (and Simulation) to make a proper agent.
@@ -269,7 +269,7 @@ class Network_Manager:
         
         Notes
         -----
-        Changed in 2.6.4: adapted for Model 1
+        Changed in 3.0.0: adapted for Model 1
 
         (From Model 2)
         Changed in 2.8: based on navpoints.
@@ -547,7 +547,7 @@ class Network_Manager:
         
         Notes
         -----
-        Chnaged in 2.6.4: apdated from Model 2.
+        Chnaged in 3.0.0: apdated from Model 2.
 
         (From Model 2)
         Changed in 2.9: updated for navpoints and can now shut down sectors containing airports.
@@ -628,7 +628,7 @@ class Network_Manager:
         
         Notes
         -----
-        Changed in 2.6.4: Adapted from Model 2.
+        Changed in 3.0.0: Adapted from Model 2.
 
         (From Model 2)
         New in 2.9.7.
@@ -707,7 +707,7 @@ class FlightPlan:
 
     Notes
     -----
-    Changed in 2.6.4: adapted from Model 2
+    Changed in 3.0.0: adapted from Model 2
 
     (From Model 2)
     Changed in 2.8: added p_nav.
@@ -751,7 +751,7 @@ class Flight:
 
     Notes
     -----
-    Changed in 2.6.4: adapted from model 2.
+    Changed in 3.0.0: adapted from model 2.
 
     (From Model 2)
     Changed in 2.9.6: Compute FPs added (coming from AirCompany object).
@@ -813,7 +813,7 @@ class Flight:
 
         Notes
         -----
-        New in 2.6.4: adapted from Model 2
+        New in 3.0.0: adapted from Model 2
 
         (From Model 2)
         Changed in 2.2: tau introduced.
@@ -891,7 +891,7 @@ class Flight:
         
         Notes
         -----
-        New in 2.6.4: taken from Model 2 (unchanged).
+        New in 3.0.0: taken from Model 2 (unchanged).
 
         """
         
@@ -966,7 +966,7 @@ class AirCompany:
 
         Notes
         -----
-        Changed in 2.6.4: taken from Model 2 (unchanged)
+        Changed in 3.0.0: taken from Model 2 (unchanged)
 
         New in 2.9.5: can specify a pair of airports.
         Changed in 2.9.6: the flight computes the flight plans itself.
@@ -996,7 +996,7 @@ class Net(nx.Graph):
 
     Notes
     ----
-    Changes in 2.6.4: sorted methods and imported methods from Model 2.
+    Changes in 3.0.0: sorted methods and imported methods from Model 2.
 
     """
     
@@ -1025,7 +1025,8 @@ class Net(nx.Graph):
         
         Notes
         -----
-        New in 2.6.4: taken from Model 2
+        New in 3.0.0: taken from Model 2
+
         (From Model 2)
         Changed in 2.9.8: changed name to add_airports. Now the airports are added
         to the existing airports instead of overwriting the list.
@@ -1070,7 +1071,7 @@ class Net(nx.Graph):
         Notes
         -----
         TODO: expand this.
-        Changed in 2.6.4: Taken from Model 2 (unchanged)
+        Changed in 3.0.0: taken from Model 2 (unchanged)
 
         """
         if name==None:
@@ -1107,7 +1108,7 @@ class Net(nx.Graph):
 
         Notes
         -----
-        Changed in 2.6.4: taken and adapted from Model 2.
+        Changed in 3.0.0: taken and adapted from Model 2.
 
         """
 
@@ -1118,7 +1119,7 @@ class Net(nx.Graph):
             self.build_net(Gtype=Gtype, mean_degree=mean_degree)  
         elif Gtype=='T':
             xAxesNodes = int(np.sqrt(N/float(1.4)))
-            self.import_from(build_triangular(xAxesNodes))
+            self.import_from(build_triangular(xAxesNodes, x_shift=-1., y_shift=-1., side=2.))
     
     def build_H(self): 
         """
@@ -1151,7 +1152,7 @@ class Net(nx.Graph):
 
         Notes
         -----
-        New in 2.6.4: taken from Model 2 (unchanged)
+        New in 3.0.0: taken from Model 2 (unchanged)
         (From Model 2)
         Remark: the network should not have any nodes yet.
         New in 2.8.2
@@ -1183,7 +1184,7 @@ class Net(nx.Graph):
 
         Notes
         -----
-        New in 2.6.4: taken from Model 2 (unchanged)
+        New in 3.0.0: taken from Model 2 (unchanged)
 
         Changed in 2.9.10: removed argument N.
 
@@ -1237,8 +1238,8 @@ class Net(nx.Graph):
 
         Notes
         -----
-        Changed in 2.6.4: taken and adapted from Model 2
-        Changed in 2.6.4: fixed a bug where the paths were not correctly sorted in output.
+        Changed in 3.0.0: taken and adapted from Model 2
+        Changed in 3.0.0: fixed a bug where the paths were not correctly sorted in output.
 
         (From Model 2)
         Changed in 2.9: added singletons option. Added repetitions options to avoid repeated sectors in paths.
@@ -1348,7 +1349,7 @@ class Net(nx.Graph):
         """
         Notes
         -----
-        New in 2.6.2: taken from Model 2 (unchanged)
+        New in 3.0.0: taken from Model 2 (unchanged)
 
         (From Model 2)
         New in 2.9.8: returns the possible connections between airports.
@@ -1363,7 +1364,7 @@ class Net(nx.Graph):
 
         Notes
         -----
-        Changed in 2.6.4: taken from Model 2 (unchanged).
+        Changed in 3.0.0: taken from Model 2 (unchanged).
 
         """
         
@@ -1380,7 +1381,7 @@ class Net(nx.Graph):
 
         Notes
         -----
-        Changed in 2.6.4: updated with stuff from Model 2
+        Changed in 3.0.0: updated with stuff from Model 2
         
         """
 
@@ -1410,8 +1411,8 @@ class Net(nx.Graph):
 
         Notes
         -----
-        Changed in 2.6.4: taken from Model 2 (unchanged).
-        Changed in 2.6.4: defulat optinal for typ is now "coords".
+        Changed in 3.0.0: taken from Model 2 (unchanged).
+        Changed in 3.0.0: default optional for typ is now "coords".
 
         """
 
@@ -1471,7 +1472,7 @@ class Net(nx.Graph):
 
         Notes
         ----- 
-        Changed in 2.6.4: taken from Model 2 (unchanged).
+        Changed in 3.0.0: taken from Model 2 (unchanged).
 
         (From Model 2)
         New in 2.7: added lognormal and areas.
@@ -1504,7 +1505,7 @@ class Net(nx.Graph):
         """
         Notes
         -----
-        New in 2.6.4: taken from Model 2(unchanged)
+        New in 3.0.0: taken from Model 2(unchanged)
         (From Model 2)
         New in 2.9.8: returns the airports based on connections.
         
@@ -1531,7 +1532,7 @@ class Net(nx.Graph):
 
         Notes
         -----
-        Changed in 2.6.4: taken from Model 2 (unchanged).
+        Changed in 3.0.0: taken from Model 2 (unchanged).
         (From Model 2)
         Changed in 2.9: included case where G is empty.
         TODO: preserve attributes of edges too.
@@ -1606,7 +1607,7 @@ class Net(nx.Graph):
 
         Notes
         -----
-        Changed in 2.6.3: the index of the loop was i too!
+        Changed in 3.0.0: the index of the loop was i too!
         TODO: See what is this fucking loop.
 
         """
@@ -1634,6 +1635,20 @@ class Net(nx.Graph):
     def shut_sector(self,n):
         for v in nx.neighbors(self,n):
             self[n][v]['weight']=10**6
+
+    def stamp_airports(self):
+        """
+
+        Notes
+        -----
+        New in 3.0.0: taken from Model 2 (unchanged).
+
+        (From Model 2)
+        New in 2.9.8: compute the list of airports based on short.
+        
+        """
+        
+        self.airports = list(self.get_airports())
 
     def weight_path(self,p): 
         """

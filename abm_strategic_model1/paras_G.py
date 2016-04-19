@@ -8,17 +8,18 @@ for the construction of the parameter dictionary for the creation of a sector ne
 Taken and adapted from Model 2.
 """
 
-from utilities import Paras, extract_data_from_files
+import sys
+sys.path.insert(1,'..')
+from abm_strategic_model1.utilities import Paras, extract_data_from_files
 import pickle
 
-paras_G = {}
+paras_G = Paras({})
 
 # ----------- Network of sector ------------
 # Leave "None" for generation of a new network
 # Input should be a pickle file with a networkx object.
 
 paras_G['file_net_sec'] = None
-paras_G['type_of_net'] = ''			# This is just for information (e.g. name of the file).
 paras_G['name'] = 'Example'			# This is just for info too.
 if paras_G['file_net_sec'] == None:
 	paras_G['N'] = 10 	# Number of sectors.
@@ -81,9 +82,8 @@ paras_G['pairs_sec'] = [] 	# List of possible connections between airports. Leav
 paras_G['file_weights'] = None
 paras_G['generate_weights_from_traffic'] = False
 if paras_G['file_weights'] == None and not paras_G['generate_weights_from_traffic']:
-	paras_G['par_weights'] = 3 # average crossing time for napvoint network in minutes.
-
-
+	paras_G['par_weights'] = 20. # average crossing time for napvoint network in minutes.
+	paras_G['typ_weights'] = 'constant'
 
 paras_G['min_dis'] = 5      # minimum number of nodes (navpoints) between entry and exit.
 
@@ -122,4 +122,5 @@ if paras_G['generate_weights_from_traffic'] or paras_G['generate_capacities_from
 # For now, only pickle files are supported.
 # TODO: automatically detect and read csv files.
 
-paras_G = extract_data_from_files(paras_G)
+paras = extract_data_from_files(paras_G)
+paras.analyse_dependance()
