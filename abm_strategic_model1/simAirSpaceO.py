@@ -1238,6 +1238,8 @@ class Net(nx.Graph):
         Notes
         -----
         Changed in 2.6.4: taken and adapted from Model 2
+        Changed in 2.6.4: fixed a bug where the paths were not correctly sorted in output.
+
         (From Model 2)
         Changed in 2.9: added singletons option. Added repetitions options to avoid repeated sectors in paths.
         Changed in 2.9.4: added procedure to have always 10 distinct paths (in sectors).
@@ -1267,7 +1269,7 @@ class Net(nx.Graph):
                 Nfp = Nfp_init
         else:
             for it, (a,b) in enumerate(pairs):
-                #print "Shortest path for", (a, b)
+                # print "Shortest path for", (a, b)
                 #if verb:
                 #    counter(it, len(pairs), message='Computing shortest paths...')
                 if a!=b:
@@ -1302,7 +1304,8 @@ class Net(nx.Graph):
 
                             assert len(paths)==Nfp and len(duplicates)==previous_duplicates
                             enough_paths=True
-                            paths = [list(vvv) for vvv in set([tuple(vv) for vv in paths])][:Nfp_init]
+                            p_paths = sorted(list(set([tuple(vv) for vv in paths])), key=lambda p:self.weight_path(p))
+                            paths = [list(vvv) for vvv in p_paths][:Nfp_init]
                             if len(paths) < Nfp_init:
                                 enough_paths = False
                                 print 'Not enough paths, doing another round (' + str(Nfp +1 - Nfp_init), 'additional path(s)).'
@@ -1338,6 +1341,7 @@ class Net(nx.Graph):
                             self.short[(a,b)].append(self.short[(a,b)][-1])
                         assert len(self.short[(a,b)])==Nfp
                 else:
+                    # for the case where a==b. Might want to remove this in Model 1.
                     self.short[(a,b)] = [[a] for i in range(Nfp)]
 
     def connections(self):

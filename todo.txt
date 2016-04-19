@@ -1,0 +1,2 @@
+ - adapt paras.py
+ - when running the test from test_simulationsO.py, an unwanted folder appears in the tests folder.

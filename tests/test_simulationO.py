@@ -7,6 +7,7 @@ import os
 
 from abm_strategic_model1.simAirSpaceO import Net, Flight
 from abm_strategic_model1.simulationO import *
+from abm_strategic_model1.utilities import post_process_paras
 
 # TODO: high level tests
 
@@ -55,7 +56,6 @@ class SimulationTest(unittest.TestCase):
 			self.G.node[a]['capacity_airport'] = 10000
 
 		self.G.comments = []
-
 
 class FunctionsTest(SimulationTest):
 	def test_build_path(self):
@@ -240,6 +240,49 @@ class SimulationFlows(SimulationTest):
 
 		for ac in sim.ACs.values():
 			self.assertTrue(ac.flights[0].pref_time in [0., 10., 20., 30.])
+
+class DoStandardTest(SimulationTest):
+	def setUp(self):
+		super(DoStandardTest, self).setUp()
+		self.prepare_paras()
+
+	def prepare_paras(self):
+		self.paras = {}
+
+		self.paras['par'] = [(1., 0., 0.), (0., 0., 1.)] # For S and R Companies
+		self.paras['Nfp'] = 2
+		self.paras['departure_times'] = 'zeros'
+		self.paras['N_shocks'] = 0.
+		self.paras['mode_M1'] = 'standard'
+		self.paras['ACtot'] = 2
+		self.paras['na'] = 1
+		self.paras['G'] = self.G
+		self.paras['tau'] = 20.
+		self.paras['nA'] = 1
+		self.paras['old_style_allocation'] = False
+		self.paras['noise'] = 0.
+		self.paras['AC'] = 2
+		self.paras['day'] = 24.*60.
+		self.paras['flows'] = {}
+		self.paras['STS'] = None
+
+	def test1(self):
+		results = do_standard((self.paras, self.G))
+
+		self.assertEqual(results['satisfaction'][(1., 0., 0.)], 1.)
+		self.assertEqual(results['regulated_FPs'][(1., 0., 0.)], 0.)
+		self.assertEqual(results['regulated_F'][(1., 0., 0.)], 0.)
+
+	def test_with_paras_file(self):
+		from abm_strategic_model1.paras_test import paras
+
+		paras = post_process_paras(paras)
+
+		results = do_standard((paras, paras['G']))
+
+		self.assertEqual(results['satisfaction'][(1., 0., 0.)], 1.)
+		self.assertEqual(results['regulated_FPs'][(1., 0., 0.)], 0.)
+		self.assertEqual(results['regulated_F'][(1., 0., 0.)], 0.)
 
 if __name__ == '__main__':
 	# Manual tests

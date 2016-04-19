@@ -665,7 +665,7 @@ def prepare_network(paras_G, rep=None, save_name=None, show=True):
     ############# Computing shortest paths ###########
     G.Nfp = paras_G['Nfp']
     
-    G.initialize_load()#2*(nx.diameter(G)+G.Nfp))
+    #G.initialize_load()#2*(nx.diameter(G)+G.Nfp))
 
     print 'Computing shortest_paths (sectors) ...'
     pairs_deleted = G.compute_shortest_paths(G.Nfp, repetitions=False, delete_pairs=False)   

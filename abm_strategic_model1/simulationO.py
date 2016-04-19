@@ -4,7 +4,6 @@ import sys
 sys.path.insert(1,'/home/earendil/Documents/ELSA/Modules')
 from os.path import join as jn
 
-from simAirSpaceO import AirCompany
 import networkx as nx
 #from random import getstate, setstate, 
 from random import shuffle, uniform,  sample, seed
@@ -14,9 +13,9 @@ import matplotlib.pyplot as plt
 import os
 import numpy as np
 import copy
-
 from math import ceil
 
+from simAirSpaceO import AirCompany, Network_Manager
 from utilities import draw_network_map
 
 from libs.paths import result_dir
@@ -66,7 +65,7 @@ class Simulation:
         
         """
 
-        self.paras=paras
+        self.paras = paras
 
         for k in ['AC', 'Nfp', 'na', 'tau', 'departure_times', 'ACtot', 'N_shocks','Np', \
             'ACsperwave','Delta_t', 'width_peak', 'old_style_allocation', 'flows', 'nA', \
@@ -111,7 +110,6 @@ class Simulation:
         if self.verb:
             print 'Doing simulation...'
 
-        self.G.initialize_load()
         Netman = Network_Manager(old_style=self.old_style_allocation)
         self.storymode = storymode
 
@@ -126,10 +124,6 @@ class Simulation:
 
         if clean:
             Netman.initialize_load(self.G, length_day=int(self.day/60.)) # TODO: check why I am doing this again.
-
-        self.netman(storymode=storymode)
-        self.mark_best_of_queue()
-        self.M0_to_M1()
         
         self.queue = Netman.build_queue(self.ACs)
 
@@ -141,7 +135,7 @@ class Simulation:
 
         self.M0_queue = copy.deepcopy(self.queue)
         #Netman.M0_to_M1(self.G, self.queue, self.N_shocks, self.tau, self.Nsp_nav, storymode=True)
-        Netman.M0_to_M1_quick(self.G, self.queue, self.N_shocks, self.tau, self.Nsp_nav, storymode=True, sectors_to_shut = self.STS)
+        Netman.M0_to_M1_quick(self.G, self.queue, self.N_shocks, self.tau, storymode=True, sectors_to_shut = self.STS)
 
     def build_ACs(self):
         """
