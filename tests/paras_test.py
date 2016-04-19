@@ -10,7 +10,7 @@ import sys as _sys
 from math import ceil as _ceil
 from os.path import join as _jn
 
-from utilities import Paras as _Paras
+from abm_strategic_model1.utilities import Paras as _Paras
 from paths import main_dir as _main_dir
 
 version = '2.6.4' # Based on version 2.9.5 of Model 2.

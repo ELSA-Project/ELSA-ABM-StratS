@@ -14,6 +14,7 @@ import matplotlib.gridspec as gridspec
 #from descartes import PolygonPatch
 import matplotlib.pyplot as plt
 import pickle
+import imp
 
 version='2.6.1'
 
@@ -360,6 +361,18 @@ def read_paras(paras_file=None, post_process=True):
 
     if post_process:
         paras = post_process_paras(paras)
+
+    return paras
+
+def read_paras_iter(paras_file=None):
+    """
+    Reads parameter file for a iterated simulations.
+    """
+    if paras_file==None:
+        import my_paras_iter as paras_mod
+    else:
+        paras_mod = imp.load_source("paras_iter", paras_file)
+    paras = paras_mod.paras
 
     return paras
 
