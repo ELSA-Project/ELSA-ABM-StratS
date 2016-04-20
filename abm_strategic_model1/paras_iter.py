@@ -27,10 +27,13 @@ paras = _read_paras(paras_file=paras_file) # Import main parameters
 
 if paras['file_net'] == None:
 	fixnetwork = True       			#if fixnetwork='False' a new graph is generated at each iteration.
+else:
+	fixnetwork = True
+
+paras['file_list_of_net_file'] = None
 
 # ---------------- Companies ---------------- #
 
-Nsp_nav_iter = range(1,11)
 tau_iter = _np.arange(0.0001,1.01,0.05)           # factor for shifting in time the flight plans.
 
 # -------------- Density and times of departure patterns -------------- #
@@ -78,6 +81,20 @@ paras_to_loop = ['density']
 if paras_to_loop==['nA'] and par!=tuple([tuple([float(_v) for _v in _p])  for _p in [[1.,0.,0.001], [1.,0.,1000.]]]) :
 	assert _yes('The set of par does not seem consistent with the loop on nA. Proceed?')
 
+if paras['control_density'] and not 'density' in paras_to_loop:
+	assert _yes('You control density but it is not in the list of variables. Proceed?')
+
+if not paras['control_density'] and 'density' in paras_to_loop:
+	assert _yes("You don't control density but it is in the list of variables. Proceed?")
+
+if paras['control_ACsperwave'] and not 'ACsperwave' in paras_to_loop:
+	assert _yes('You control ACsperwave but it is not in the list of variables. Proceed?')
+
+if not paras['control_ACsperwave'] and 'ACsperwave' in paras_to_loop:
+	assert _yes("You don't control ACsperwave but it is in the list of variables. Proceed?")
+
+if (paras['control_ACsperwave'] or paras['control_density']) and 'ACtot' in paras_to_loop:
+	assert _yes("You don't control ACtot but it is in the list of variables. Proceed?")
 
 # -------------- Stuff useful if G or airports is iterated ----------- #
 # You can also loop on "airports" or networks.
@@ -98,12 +115,22 @@ if 'airports' in paras_to_loop and paras_to_loop[0]!='airports':
 
 # -------------------- Post-processing -------------------- #
 # Add new parameters to the dictionary.
-
+paras['n_iter'] = n_iter
 paras['par_iter'] = tuple([tuple([tuple([float(_v) for _v in _pp])  for _pp in _p])  for _p in par_iter]) # transformation in tuple, because arrays cannot be keys for dictionaries.
-paras['fixnetwork'] = paras['par_iter']
+paras['fixnetwork'] = fixnetwork
 
 for k,v in vars().items():
     if k[-4:]=='iter' and k[:-5] in paras_to_loop:
         paras[k] = v
 
 paras['paras_to_loop'] = paras_to_loop
+
+if paras['file_list_of_net_file']!=None:
+	with open(paras['file_list_of_net_file'], 'r') as f:
+		list_files = _pickle.load(f)
+
+	paras['airports_iter'] = []
+	for fil in list_files:
+		with open(fil, 'r') as f:
+			G = _pickle.load(f)
+			paras['airports_iter'].append(G)

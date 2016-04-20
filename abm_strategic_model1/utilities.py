@@ -379,6 +379,20 @@ def read_paras_iter(paras_file=None):
 
     return paras
 
+def control_density_ACtot(paras, to_update, update_priority):
+    if paras['control_density']:
+        # ACtot is not an independent variable and is computed thanks to density
+        paras['ACtot']=_func_ACtot_vs_density_day_na(paras['density'], paras['day'], paras['na'])
+        to_update['ACtot']=(_func_ACtot_vs_density_day_na, ('density', 'day', 'na'))
+        update_priority.append('ACtot')
+    else:
+        # Density is not an independent variables and is computed thanks to ACtot.
+        paras['density']=_func_density_vs_ACtot_na_day(paras['ACtot'], paras['na'], paras['day'])
+        to_update['density']=(_func_density_vs_ACtot_na_day,('ACtot','na','day'))
+        update_priority.append('density')
+
+    return paras, to_update, update_priority
+
 def post_process_paras(paras):
     ##################################################################################
     ################################# Post processing ################################
@@ -453,15 +467,6 @@ def post_process_paras(paras):
                 with open('times_2010_5_6.pic', 'r') as f:
                     paras['times']=pickle.load(f)
         else:
-            if paras['control_density']:
-                # ACtot is not an independent variable and is computed thanks to density
-                paras['ACtot']=_func_ACtot_vs_density_day_na(paras['density'], paras['day'], paras['na'])
-                to_update['ACtot']=(_func_ACtot_vs_density_day_na, ('density', 'day', 'na'))
-            else:
-                # Density is not an independent variables and is computed thanks to ACtot.
-                paras['density']=_func_density_vs_ACtot_na_day(paras['ACtot'], paras['na'], paras['day'])
-                to_update['density']=(_func_density_vs_ACtot_na_day,('ACtot','na','day'))
-
             assert paras['departure_times'] in ['zeros','from_data','uniform','square_waves']
 
             if paras['departure_times']=='square_waves':
@@ -471,19 +476,23 @@ def post_process_paras(paras):
 
                 if paras['control_ACsperwave']:
                     # density/ACtot based on ACsperwave
+                    # Could also swap computation of density and ACtot here.
                     paras['density'] = _func_density_vs_ACsperwave_Np_na_day(paras['ACsperwave'], paras['Np'], paras['ACtot'], paras['na'], paras['day'])
-                    to_update['density']=(_func_density_vs_ACsperwave_Np_na_day,('ACsperwave', 'Np', 'ACtot', 'na', 'day'))
+                    to_update['density'] = (_func_density_vs_ACsperwave_Np_na_day,('ACsperwave', 'Np', 'ACtot', 'na', 'day'))
                     update_priority.append('density')   
+                    paras['ACtot']=_func_ACtot_vs_density_day_na(paras['density'], paras['day'], paras['na'])
+                    to_update['ACtot']=(_func_ACtot_vs_density_day_na, ('density', 'day', 'na'))
+                    update_priority.append('ACtot')
                 else:
                     # ACperwave based on density/ACtot
-                    paras['ACsperwave']=_func_ACsperwave_vs_density_day_Np(paras['density'], paras['day'], paras['Np'])
-                    to_update['ACsperwave']=(_func_ACsperwave_vs_density_day_Np,('density', 'day','Np'))
+                    paras, to_update, update_priority = control_density_ACtot(paras, to_update, update_priority)
+                    # The following could also be computed based on ACtot. At this stage, both ACtot and density
+                    # should be up to date.
+                    paras['ACsperwave'] =_func_ACsperwave_vs_density_day_Np(paras['density'], paras['day'], paras['Np'])
+                    to_update['ACsperwave'] = (_func_ACsperwave_vs_density_day_Np,('density', 'day','Np'))
                     update_priority.append('ACsperwave')
-
-            if paras['control_density']:
-                update_priority.append('ACtot')     # Update ACtot last
             else:
-                update_priority.append('density')   # Update density last
+                paras, to_update, update_priority = control_density_ACtot(paras, to_update, update_priority)
 
     # --------------- Network stuff --------------#
     # if paras['G']!=None:
@@ -528,7 +537,12 @@ def post_process_paras(paras):
 
     # Add update priority here
 
-    paras.update_priority=update_priority
+    update_priority.append('AC')
+    update_priority.append('AC_dict')
+
+    paras.update_priority = update_priority
+
+    print 'update_priority:', update_priority
 
     paras.analyse_dependance()
 
@@ -543,7 +557,7 @@ def _func_density_vs_ACtot_na_day(ACtot, na, day):
     """
     Used to compute density when ACtot, na or day are variables.
     """
-    return ACtot*na/float(day)
+    return ACtot*na/float(day/60.)
 
 def _func_density_vs_ACsperwave_Np_na_day(ACsperwave, Np, ACtot, na, day):
     ACtot = _func_ACtot_vs_ACsperwave_Np(ACsperwave, Np)
@@ -559,17 +573,18 @@ def _func_ACsperwave_vs_density_day_Np(density, day, Np):
     """
     Used to compute ACsperwave when density, day or Np are variables.
     """
-    return int(float(density*day/unit)/float(Np))
+    print 'ACsperwave', int(float(density*day/60.)/float(Np))
+    return int(float(density*day/60.)/float(Np))
 
 def _func_ACtot_vs_density_day_na(density, day, na):
     """
     Used to compute ACtot when density, day or na are variables.
     """
-    return int(density*day/float(na))
+    return int(density*(day/60.)/float(na))
 
 def _func_Np(day, width_peak, Delta_t):
     """
     Used to compute Np based on width of waves, duration of day and 
-    time between the end of a wave and the beginning of the nesx wave.
+    time between the end of a wave and the beginning of the next wave.
     """
     return int(ceil(day/float(width_peak+Delta_t)))

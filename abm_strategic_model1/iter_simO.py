@@ -91,12 +91,12 @@ def build_path_average(paras, vers=main_version, in_title=['tau', 'par', 'ACtot'
     Build the path for results.
     """
 
-    if Gname==None:
-        Gname = paras['G'].name
+    #if Gname==None:
+    #    Gname = paras['G'].name
     
-    rep = jn(rep, 'Sim_v' + vers + '_' + Gname)
+    #rep = jn(rep, Gname)
     
-    return build_path_single(paras, vers=vers, rep=rep) + '_iter' + str(paras['n_iter']) + '.pic'
+    return build_path_single(paras, vers=vers, rep=rep, name_G=Gname) + '_iter' + str(paras['n_iter']) + '.pic'
 
 def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path_average, rep=result_dir):
     """
@@ -114,8 +114,7 @@ def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path
     Changed in 2.9.4: removed integer i in the call of do_standard. Updated build_pat output.
     
     """
-
-    rep = build_pat(paras, Gname=paras['G'].name, rep=rep)
+    rep = build_pat(paras, Gname=G.name, rep=rep)
     if paras['force'] or not os.path.exists(rep):  
         inputs = [(paras, G) for i in range(paras['n_iter'])]
         start_time=time()
@@ -148,7 +147,7 @@ def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path
     else:
         print 'Skipped this value because the file already exists and parameter force is deactivated.'
 
-def loop(a, level, parass, thing_to_do=None, **args):
+def loop(a, level, parass, gather=False, thing_to_do=None, **args):
     """
     Generic recursive function to make several levels of iterations.
    
@@ -165,15 +164,18 @@ def loop(a, level, parass, thing_to_do=None, **args):
     New in 2.6: Makes an arbitrary number of loops
 
     """
-
+    all_stuff = []
     if level==[]:
-        thing_to_do(**args)#(paras, G)
+        return thing_to_do(**args)
     else:
         assert level[0] in a.keys()
         for i in a[level[0]]:
             print level[0], '=', i
             parass.update(level[0],i)
-            loop(a, level[1:], parass, thing_to_do=thing_to_do, **args)
+            stuff = loop(a, level[1:], parass, thing_to_do=thing_to_do, **args)
+            if gather:
+                all_stuff.append(stuff)
+        return all_stuff
     
 def iter_sim(paras, save=1, do=do_standard, build_pat=build_path_average, rep=result_dir):#, make_plots=True):#la variabile test_airports è stata inserita al solo scopo di testare le rejections
     """
@@ -207,18 +209,23 @@ def iter_sim(paras, save=1, do=do_standard, build_pat=build_path_average, rep=re
     loop({p:paras[p + '_iter'] for p in paras['paras_to_loop']}, paras['paras_to_loop'], \
         paras, thing_to_do=average_sim, paras=paras, G=G, do=do, build_pat=build_pat, save=save, rep=rep)
 
-def change_airports((G, paras_G)):
+def change_airports((G, paras_G), change_name_G=True):
     """
     Used to generate networks with different soft infrastructure but 
     the same hard infrastructure.
     """
 
     soft_infrastructure(G, paras_G)
-    save_name = G.name + '_nairports' + str(paras_G['nairports_sec']) + '_' + str(paras_G['I_iter'])
+    save_name = G.name_generic + '_nairports' + str(paras_G['nairports_sec']) + '_' + str(paras_G['I_iter'])
+
+    if change_name_G:
+        G.name = save_name
 
     # Save 
     with open(jn(G.rep, save_name) + '.pic','w') as f:
         pickle.dump(G, f)
+
+    return jn(G.rep, save_name) + '.pic'
 
 def iter_airport_change(paras, G, do=change_airports):
     """
@@ -228,13 +235,18 @@ def iter_airport_change(paras, G, do=change_airports):
     New in 3.0.0
     
     """        
+    G.name_generic = G.name
 
-    loop({p:paras[p + '_iter'] for p in paras['paras_to_loop']}, paras['paras_to_loop'], \
-        paras, thing_to_do=produce_several_airports, paras=paras, do=do, G=G)
+    files = loop({p:paras[p + '_iter'] for p in paras['paras_to_loop']}, paras['paras_to_loop'], \
+        paras, gather=True, thing_to_do=produce_several_airports, paras=paras, do=do, G=G)
+
+    with open(jn(G.rep, 'list_of_files.pic'), 'w') as f:
+        pickle.dump(list(np.array(files).flatten()), f)
 
 def produce_several_airports(paras, do=change_airports, G=None):
     """
-    Used to produce several versions of a network (hard infrastructure is fixed).
+    Used to produce several versions of a network (draw the airports at random at each iteration).
+    paras is fixed here.
 
     Notes
     -----
@@ -243,21 +255,24 @@ def produce_several_airports(paras, do=change_airports, G=None):
     """
 
     inputs = []
+    print 'G.name_generic', G.name_generic
     for i in range(paras['n_iter']):
         paras['I_iter'] = i
         inputs.append((G, paras.copy()))
 
     start_time = time()
+    files = []
     if paras['parallel']:
         parmap(do, inputs)
     else:
         for i, a in enumerate(inputs):
             #sys.stdout.write('\r' + 'Doing simulations...' + str(int(100*(i+1)/float(paras['n_iter']))) + '%')
             #sys.stdout.flush() 
-            #results_list.append(do(a))
-            do(a)
+            fil = do(a)
+            files.append(fil)
         
     print '... done in', time()-start_time, 's'
+    return files
 
 if __name__=='__main__':
     """

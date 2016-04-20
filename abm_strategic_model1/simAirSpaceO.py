@@ -635,8 +635,8 @@ class Network_Manager:
         
         """
         
-        if storymode:
-            print "N_shocks:", N_shocks
+        #if storymode:
+        #    print "N_shocks:", N_shocks
         if sectors_to_shut==None:
             #sectors_to_shut = shock_sectors(G, N_shocks)#sample(G.nodes(), N_shocks)
             sectors_to_shut = sample(G.nodes(), int(N_shocks))

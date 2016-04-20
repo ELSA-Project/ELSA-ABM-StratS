@@ -73,6 +73,7 @@ class Simulation:
             if k in paras.keys():
                 setattr(self, k, paras[k])
     
+        print 'self.AC = ', self.AC
         self.make_times()
         self.pars = paras['par']
 
@@ -84,7 +85,7 @@ class Simulation:
         self.verb = verbose
         self.rep = build_path(paras)
         
-        os.system('mkdir -p ' + self.rep)
+        #os.system('mkdir -p ' + self.rep) TODO: see this!
         
     def make_simu(self, clean=False, storymode=False):
         """
@@ -179,6 +180,8 @@ class Simulation:
             assert len(self.AC)==len(self.pars)
         except:
             raise Exception('AC should have the same length than the parameters, or be an integer')
+
+        print 'self.AC=', self.AC
     
         self.ACs={}
         k=0
@@ -370,17 +373,22 @@ class Simulation:
         """
 
         if self.departure_times=='zeros':
-            self.t0sp=[[0 for j in range(self.na)] for i in range(self.ACtot)]     
+            self.t0sp = [[0 for j in range(self.na)] for i in range(self.ACtot)]     
         elif self.departure_times=='uniform':
-            self.t0sp=[[uniform(0, self.day) for j in range(self.na)] for i in range(self.ACtot)]
+            self.t0sp = [[uniform(0, self.day) for j in range(self.na)] for i in range(self.ACtot)]
         elif self.departure_times=='square_waves':
-            self.t0sp=[]
+            self.t0sp = []
             if self.na==1:
                 for i in range(self.Np):
                     for j in range(self.ACsperwave):
                         self.t0sp.append([uniform(i*(self.width_peak+self.Delta_t),i*(self.width_peak+self.Delta_t)+self.width_peak)])
+                
+                # add the reamining flights in the last wave
+                while len(self.t0sp)<self.ACtot:
+                    self.t0sp.append([uniform(i*(self.width_peak+self.Delta_t),i*(self.width_peak+self.Delta_t)+self.width_peak)])
+                print 'len(self.t0sp)=', np.array(self.t0sp).shape
             else:
-                raise Exception('na=1 is not implemented yet...')
+                raise Exception('na!=1 is not implemented yet...')
             
     def mark_best_of_queue(self):
         """
@@ -413,7 +421,7 @@ class Simulation:
                 f.shift_desired_time(gauss(0., self.noise))
                  
 def build_path(paras, vers=main_version, in_title=['Nfp', 'tau', 'par', 'ACtot', 'nA', 'departure_times',\
-    'old_style_allocation', 'noise'], rep=result_dir):
+    'old_style_allocation', 'noise'], rep=result_dir, name_G=None):
     """
     Used to build name + path from a set of paras. 
 
@@ -442,8 +450,11 @@ def build_path(paras, vers=main_version, in_title=['Nfp', 'tau', 'par', 'ACtot',
     Chnaged in 2.5: added N_shocks and improved the rest.
 
     """
-    
-    name = 'model1/Sim_v' + vers + '_' + paras['G'].name
+
+    if name_G==None:
+        name_G = paras['G'].name
+
+    name = 'model1/' + name_G + '/Sim_v' + vers + '_' + paras['G'].name
     name = jn(rep, name)
     
     in_title = list(np.unique(in_title))
