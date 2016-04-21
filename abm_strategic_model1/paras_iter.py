@@ -87,13 +87,13 @@ if paras['control_density'] and not 'density' in paras_to_loop:
 if not paras['control_density'] and 'density' in paras_to_loop:
 	assert _yes("You don't control density but it is in the list of variables. Proceed?")
 
-if paras['control_ACsperwave'] and not 'ACsperwave' in paras_to_loop:
+if 'control_ACsperwave' in paras.keys() and paras['control_ACsperwave'] and not 'ACsperwave' in paras_to_loop:
 	assert _yes('You control ACsperwave but it is not in the list of variables. Proceed?')
 
-if not paras['control_ACsperwave'] and 'ACsperwave' in paras_to_loop:
+if 'control_ACsperwave' in paras.keys() and not paras['control_ACsperwave'] and 'ACsperwave' in paras_to_loop:
 	assert _yes("You don't control ACsperwave but it is in the list of variables. Proceed?")
 
-if (paras['control_ACsperwave'] or paras['control_density']) and 'ACtot' in paras_to_loop:
+if 'control_ACsperwave' in paras.keys() and (paras['control_ACsperwave'] or paras['control_density']) and 'ACtot' in paras_to_loop:
 	assert _yes("You don't control ACtot but it is in the list of variables. Proceed?")
 
 # -------------- Stuff useful if G or airports is iterated ----------- #
@@ -125,10 +125,11 @@ for k,v in vars().items():
 
 paras['paras_to_loop'] = paras_to_loop
 
-if paras['file_list_of_net_file']!=None:
+if 'file_list_of_net_file' in paras.keys() and paras['file_list_of_net_file']!=None:
 	with open(paras['file_list_of_net_file'], 'r') as f:
 		list_files = _pickle.load(f)
 
+	print 'Loading networks...'
 	paras['airports_iter'] = []
 	for fil in list_files:
 		with open(fil, 'r') as f:

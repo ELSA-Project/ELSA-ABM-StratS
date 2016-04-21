@@ -49,7 +49,7 @@ if file_traffic==None:
 	# the type of control you choose.
 	ACtot = 2 							# Relevant for choosing the total number of ACss.
 	density = 20          				# Relevant for choosing an overall density of flights
-	control_density = False				# If you want to set the density rather than the number of flights.
+	control_density = True				# If you want to set the density rather than the number of flights.
 	
 	departure_times = 'zeros' #departing time for each flight, for each AC
 
@@ -87,10 +87,15 @@ else:
 	# In this mode, only one sector is shut down (used principally for iterations over shocks)
 	STS = None  #Sectors to Shut
 	
+# --------------------- Network Manager -------------------- #
+# If True, the manager will not check the capacity constraints of the sectors
+# or origin and destination. Putting false gices a big advantage to companies S.
+
+discard_first_and_last_node = True
+old_style_allocation = False			# Don't remember what this is. Computation of load?
 
 # --------------------System parameters -------------------- #
 parallel = False						# Parallel computation or not
-old_style_allocation = False			# Don't remember what this is. Computation of load?
 force = False							# force overwrite of already existing simulation (based on name of file).
 
 

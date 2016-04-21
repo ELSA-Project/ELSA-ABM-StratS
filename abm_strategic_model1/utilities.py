@@ -585,3 +585,36 @@ def _func_Np(day, width_peak, Delta_t):
     time between the end of a wave and the beginning of the next wave.
     """
     return int(ceil(day/float(width_peak+Delta_t)))
+
+# ============================================================================ #
+
+def total_static_overlap(paths):
+    """
+    Compute the overlap between a list of paths.
+
+    Parameters
+    ----------
+    paths : list
+        of pretty much anything which can be put in a set.
+
+    Returns
+    -------
+    mean_overlap : float,
+        average of (number of common elements/ all elements) between pairs
+        of paths.
+
+    Notes
+    -----
+    Probably equal to the (mean) Jacquard index between pairs.
+
+    """
+    
+    overlaps = []
+    for i, p1 in enumerate(paths):
+        for j, p2 in enumerate(paths):
+            if i<j:
+                common_elements = float(len(set(p1).intersection(set(p2))))
+                all_elements = float(len(set(p1).union(set(p2))))
+                overlaps.append(common_elements/all_elements)
+
+    return np.mean(overlaps)

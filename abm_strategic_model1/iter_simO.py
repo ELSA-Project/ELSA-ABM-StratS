@@ -35,14 +35,14 @@ main_version = split(version,'.')[0] + '.' + split(version,'.')[1]
 
 # This is for parallel computation.
 def spawn(f):
-    def fun(pipe,x):
+    def fun(pipe, x):
         pipe.send(f(x))
         pipe.close()
     return fun
 
-def parmap(f,X):
+def parmap(f, X):
     pipe = [Pipe() for x in X]
-    proc = [Process(target=spawn(f),args=(c,x)) for x,(p,c) in izip(X,pipe)]
+    proc = [Process(target=spawn(f), args=(c,x)) for x, (p,c) in izip(X,pipe)]
     [p.start() for p in proc]
     [p.join() for p in proc]
     return [p.recv() for (p,c) in pipe]
@@ -119,10 +119,10 @@ def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path
         inputs = [(paras, G) for i in range(paras['n_iter'])]
         start_time = time()
         if paras['parallel']:
-            print 'Doing iterations',
+            print 'Doing', len(inputs), 'iterations in parallel...',
             results_list = parmap(do, inputs)
         else:
-            print 'Doing', len(inputs), 'iterations',
+            print 'Doing', len(inputs), 'iterations sequentially...',
             results_list = []
             for i, a in enumerate(inputs):
                 #sys.stdout.write('\r' + 'Doing simulations...' + str(int(100*(i+1)/float(paras['n_iter']))) + '%')
@@ -130,7 +130,7 @@ def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path
                 results_list.append(do(a))
             
             
-        print '... done in', time()-start_time, 's'
+        print ' done in', time()-start_time, 's'
         print
         
         results={}

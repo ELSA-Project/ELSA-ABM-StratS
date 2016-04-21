@@ -90,10 +90,10 @@ else:
 # or origin and destination. Putting false gices a big advantage to companies S.
 
 discard_first_and_last_node = True
+old_style_allocation = False			# If True, loads are based on peaks. Otherwise, on hourly occupation.
 
 # --------------------System parameters -------------------- #
 parallel = False						# Parallel computation or not
-old_style_allocation = False			# Don't remember what this is. Computation of load?
 force = False							# force overwrite of already existing simulation (based on name of file).
 
 

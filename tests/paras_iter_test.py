@@ -22,7 +22,8 @@ version = '2.6.7' # Based on version 2.9.5 in Model.
 # =============================== Parameters ================================= #
 # ============================================================================ #
 
-paras = _read_paras(paras_file='paras_test.py') # Import main parameters
+paras_file = 'paras_test.py'
+paras = _read_paras(paras_file=paras_file) # Import main parameters
 
 if paras['file_net'] == None:
 	fixnetwork=True       				#if fixnetwork='False' a new graph is generated at each iteration.
@@ -77,6 +78,20 @@ paras_to_loop = ['density']
 if paras_to_loop==['nA'] and par!=tuple([tuple([float(_v) for _v in _p])  for _p in [[1.,0.,0.001], [1.,0.,1000.]]]) :
 	assert _yes('The set of par does not seem consistent with the loop on nA. Proceed?')
 
+if paras['control_density'] and not 'density' in paras_to_loop:
+	assert _yes('You control density but it is not in the list of variables. Proceed?')
+
+if not paras['control_density'] and 'density' in paras_to_loop:
+	assert _yes("You don't control density but it is in the list of variables. Proceed?")
+
+if 'control_ACsperwave' in paras.keys() and paras['control_ACsperwave'] and not 'ACsperwave' in paras_to_loop:
+	assert _yes('You control ACsperwave but it is not in the list of variables. Proceed?')
+
+if 'control_ACsperwave' in paras.keys() and not paras['control_ACsperwave'] and 'ACsperwave' in paras_to_loop:
+	assert _yes("You don't control ACsperwave but it is in the list of variables. Proceed?")
+
+if 'control_ACsperwave' in paras.keys() and (paras['control_ACsperwave'] or paras['control_density']) and 'ACtot' in paras_to_loop:
+	assert _yes("You don't control ACtot but it is in the list of variables. Proceed?")
 
 # -------------- Stuff useful if G or airports is iterated ----------- #
 # You can also loop on "airports" or networks.
@@ -107,3 +122,16 @@ for k,v in vars().items():
         paras[k] = v
 
 paras['paras_to_loop'] = paras_to_loop
+
+if 'file_list_of_net_file' in paras.keys() and paras['file_list_of_net_file']!=None:
+	with open(paras['file_list_of_net_file'], 'r') as f:
+		list_files = _pickle.load(f)
+
+	print 'Loading networks...'
+	paras['airports_iter'] = []
+	for fil in list_files:
+		with open(fil, 'r') as f:
+			G = _pickle.load(f)
+			paras['airports_iter'].append(G)
+
+paras['paras_file'] = paras_file
