@@ -134,3 +134,5 @@ if paras['file_list_of_net_file']!=None:
 		with open(fil, 'r') as f:
 			G = _pickle.load(f)
 			paras['airports_iter'].append(G)
+
+paras['paras_file'] = paras_file

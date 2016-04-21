@@ -44,7 +44,7 @@ class Network_Manager:
 
     """
     
-    def __init__(self, old_style=False):
+    def __init__(self, old_style=False, discard_first_and_last_node=True):
         """
 
         Parameters
@@ -61,6 +61,7 @@ class Network_Manager:
         
         """
         
+        self.discard_first_and_last_node = discard_first_and_last_node
         self.old_style = old_style 
         if not old_style:
             self.overload_sector = self.overload_sector_hours
@@ -165,7 +166,7 @@ class Network_Manager:
                 print "Flight with position", i, "from", f.source, "to", f.destination, "of company", f.ac_id
                 print "with parameters", f.par
                 print "tries to be allocated."
-            f.pos_queue=i
+            f.pos_queue = i
             self.allocate_flight(G, f, storymode=storymode)
             if storymode:
                 print "flight accepted:", f.fp_selected!=None
@@ -205,10 +206,10 @@ class Network_Manager:
         #print 'flight id', flight.ac_id
         while i<len(flight.FPs) and not found:
             # print 'fp id', i
-            fp=flight.FPs[i]
+            fp = flight.FPs[i]
             #print 'fp.p', fp.p
             self.compute_flight_times(G, fp)
-            path, times=fp.p, fp.times
+            path, times = fp.p, fp.times
 
             if storymode:
                 print "     FP no", i, "tries to be allocated with trajectory (sectors):"
@@ -216,10 +217,12 @@ class Network_Manager:
                 print "and crossing times:"
                 print fp.times
 
-            #first=1 ###### ATTENTION !!!!!!!!!!!
-            first=0 ###### ATTENTION !!!!!!!!!!!
-            #last=len(path)-1 ########## ATTENTION !!!!!!!!!!!
-            last=len(path) ########## ATTENTION !!!!!!!!!!!
+            if self.discard_first_and_last_node:
+                first = 1 ###### ATTENTION !!!!!!!!!!!
+                last = len(path)-1 ########## ATTENTION !!!!!!!!!!!
+            else:
+                first = 0 ###### ATTENTION !!!!!!!!!!!    
+                last = len(path) ########## ATTENTION !!!!!!!!!!!
             
             j=first
             while j<last and not self.overload_sector(G, path[j],(times[j],times[j+1])):#and self.node[path[j]]['load'][j+time] + 1 <= self.node[path[j]]['capacity']:

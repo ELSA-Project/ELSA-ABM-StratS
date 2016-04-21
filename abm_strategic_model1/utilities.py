@@ -542,8 +542,6 @@ def post_process_paras(paras):
 
     paras.update_priority = update_priority
 
-    print 'update_priority:', update_priority
-
     paras.analyse_dependance()
 
     return paras
@@ -573,7 +571,6 @@ def _func_ACsperwave_vs_density_day_Np(density, day, Np):
     """
     Used to compute ACsperwave when density, day or Np are variables.
     """
-    print 'ACsperwave', int(float(density*day/60.)/float(Np))
     return int(float(density*day/60.)/float(Np))
 
 def _func_ACtot_vs_density_day_na(density, day, na):

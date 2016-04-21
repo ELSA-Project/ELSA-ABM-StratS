@@ -85,6 +85,11 @@ else:
 	# In this mode, only one sector is shut down (used principally for iterations over shocks)
 	STS = None  #Sectors to Shut
 	
+# --------------------- Network Manager -------------------- #
+# If True, the manager will not check the capacity constraints of the sectors
+# or origin and destination. Putting false gices a big advantage to companies S.
+
+discard_first_and_last_node = True
 
 # --------------------System parameters -------------------- #
 parallel = False						# Parallel computation or not

@@ -47,3 +47,4 @@ for k,v in vars().items():
 
 paras['paras_to_loop'] = paras_to_loop
 paras['n_iter'] = n_iter
+paras['paras_file'] = paras_file

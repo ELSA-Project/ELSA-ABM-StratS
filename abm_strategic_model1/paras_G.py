@@ -118,6 +118,10 @@ if paras_G['generate_weights_from_traffic'] or paras_G['generate_capacities_from
 	except:
 		raise Exception("You asked to generate weights or capacities but did not provide traffic data.")
 
+# --------------------System parameters -------------------- #
+force = False	# force overwrite of already existing network (based on name of file).
+
+
 # -------------- Read files --------------
 # For now, only pickle files are supported.
 # TODO: automatically detect and read csv files.

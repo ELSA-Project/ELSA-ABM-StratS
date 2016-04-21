@@ -69,11 +69,11 @@ class Simulation:
 
         for k in ['AC', 'Nfp', 'na', 'tau', 'departure_times', 'ACtot', 'N_shocks','Np', \
             'ACsperwave','Delta_t', 'width_peak', 'old_style_allocation', 'flows', 'nA', \
-            'day', 'noise', 'STS', 'starting_date', 'bootstrap_mode', 'bootstrap_only_time']:
+            'day', 'noise', 'STS', 'starting_date', 'bootstrap_mode', 'bootstrap_only_time',\
+            'discard_first_and_last_node']:
             if k in paras.keys():
                 setattr(self, k, paras[k])
     
-        print 'self.AC = ', self.AC
         self.make_times()
         self.pars = paras['par']
 
@@ -111,7 +111,7 @@ class Simulation:
         if self.verb:
             print 'Doing simulation...'
 
-        Netman = Network_Manager(old_style=self.old_style_allocation)
+        Netman = Network_Manager(old_style=self.old_style_allocation, discard_first_and_last_node=self.discard_first_and_last_node)
         self.storymode = storymode
 
         #------------------------------------------------------# 
@@ -180,8 +180,6 @@ class Simulation:
             assert len(self.AC)==len(self.pars)
         except:
             raise Exception('AC should have the same length than the parameters, or be an integer')
-
-        print 'self.AC=', self.AC
     
         self.ACs={}
         k=0
@@ -386,7 +384,6 @@ class Simulation:
                 # add the reamining flights in the last wave
                 while len(self.t0sp)<self.ACtot:
                     self.t0sp.append([uniform(i*(self.width_peak+self.Delta_t),i*(self.width_peak+self.Delta_t)+self.width_peak)])
-                print 'len(self.t0sp)=', np.array(self.t0sp).shape
             else:
                 raise Exception('na!=1 is not implemented yet...')
             

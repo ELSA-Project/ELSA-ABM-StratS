@@ -117,12 +117,13 @@ def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path
     rep = build_pat(paras, Gname=G.name, rep=rep)
     if paras['force'] or not os.path.exists(rep):  
         inputs = [(paras, G) for i in range(paras['n_iter'])]
-        start_time=time()
+        start_time = time()
         if paras['parallel']:
             print 'Doing iterations',
             results_list = parmap(do, inputs)
         else:
-            results_list=[]
+            print 'Doing', len(inputs), 'iterations',
+            results_list = []
             for i, a in enumerate(inputs):
                 #sys.stdout.write('\r' + 'Doing simulations...' + str(int(100*(i+1)/float(paras['n_iter']))) + '%')
                 #sys.stdout.flush() 
@@ -130,6 +131,7 @@ def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path
             
             
         print '... done in', time()-start_time, 's'
+        print
         
         results={}
         for met in results_list[0].keys():
@@ -147,7 +149,7 @@ def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path
     else:
         print 'Skipped this value because the file already exists and parameter force is deactivated.'
 
-def loop(a, level, parass, gather=False, thing_to_do=None, **args):
+def loop(a, level, parass, gather=False, thing_to_do=None, tot_lvl=0, **args):
     """
     Generic recursive function to make several levels of iterations.
    
@@ -158,21 +160,28 @@ def loop(a, level, parass, gather=False, thing_to_do=None, **args):
     level: list,
         of parameters on which to loop. The first one is the most outer loop, the last
         one is the most inner loop.
+    gather: boolean, optional
+        if true, gather the results of all the individula loops.
+    tot_lvl: int, optional
+        Informational only. Should be the total number of levels. Passed unchanged.
     
     Notes
     -----
     New in 2.6: Makes an arbitrary number of loops
+    Changed in 3.0.0: added gather option
 
     """
+
     all_stuff = []
     if level==[]:
         return thing_to_do(**args)
     else:
         assert level[0] in a.keys()
         for i in a[level[0]]:
-            print level[0], '=', i
+            n_dashes = max(0, tot_lvl - len(level)+1)
+            print n_dashes*'-', level[0], '=', i
             parass.update(level[0],i)
-            stuff = loop(a, level[1:], parass, thing_to_do=thing_to_do, **args)
+            stuff = loop(a, level[1:], parass, thing_to_do=thing_to_do, tot_lvl=tot_lvl, **args)
             if gather:
                 all_stuff.append(stuff)
         return all_stuff
@@ -207,7 +216,7 @@ def iter_sim(paras, save=1, do=do_standard, build_pat=build_path_average, rep=re
         G = None
         
     loop({p:paras[p + '_iter'] for p in paras['paras_to_loop']}, paras['paras_to_loop'], \
-        paras, thing_to_do=average_sim, paras=paras, G=G, do=do, build_pat=build_pat, save=save, rep=rep)
+        paras, tot_lvl=len(paras['paras_to_loop']), thing_to_do=average_sim, paras=paras, G=G, do=do, build_pat=build_pat, save=save, rep=rep)
 
 def change_airports((G, paras_G), change_name_G=True):
     """
@@ -215,17 +224,22 @@ def change_airports((G, paras_G), change_name_G=True):
     the same hard infrastructure.
     """
 
-    soft_infrastructure(G, paras_G)
     save_name = G.name_generic + '_nairports' + str(paras_G['nairports_sec']) + '_' + str(paras_G['I_iter'])
+    path_save = jn(G.rep, save_name) + '.pic'
 
-    if change_name_G:
-        G.name = save_name
+    if paras_G['force'] or not os.path.exists(path_save):  
+        soft_infrastructure(G, paras_G)
+        
+        if change_name_G:
+            G.name = save_name
 
-    # Save 
-    with open(jn(G.rep, save_name) + '.pic','w') as f:
-        pickle.dump(G, f)
+        # Save 
+        with open(path_save,'w') as f:
+            pickle.dump(G, f)
+    else:
+        print 'Skipped this value because the file already exists and parameter force is deactivated.'
 
-    return jn(G.rep, save_name) + '.pic'
+    return path_save
 
 def iter_airport_change(paras, G, do=change_airports):
     """
@@ -242,6 +256,8 @@ def iter_airport_change(paras, G, do=change_airports):
 
     with open(jn(G.rep, 'list_of_files.pic'), 'w') as f:
         pickle.dump(list(np.array(files).flatten()), f)
+
+    print "Lisf of files of network saved as", jn(G.rep, 'list_of_files.pic')
 
 def produce_several_airports(paras, do=change_airports, G=None):
     """
@@ -265,6 +281,7 @@ def produce_several_airports(paras, do=change_airports, G=None):
     if paras['parallel']:
         parmap(do, inputs)
     else:
+        print 'Doing', len(inputs), 'iterations...'
         for i, a in enumerate(inputs):
             #sys.stdout.write('\r' + 'Doing simulations...' + str(int(100*(i+1)/float(paras['n_iter']))) + '%')
             #sys.stdout.flush() 
