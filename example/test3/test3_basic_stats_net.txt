@@ -1,0 +1,3 @@
+Mean/std degree: 3.55555555556 1.25707872211
+Mean/std weight: 20.0001822809 0.00247679143876
+Mean/std capacity: 5.0 0.0
