@@ -123,6 +123,9 @@ class Simulation:
         else:
             self.build_ACs_from_flows()
 
+        # self.show_ACs()
+        # raise Exception()
+        
         if clean:
             Netman.initialize_load(self.G, length_day=int(self.day/60.)) # TODO: check why I am doing this again.
         
@@ -416,7 +419,13 @@ class Simulation:
         if self.noise!=0:
             for f in self.queue:
                 f.shift_desired_time(gauss(0., self.noise))
-                 
+     
+    def show_ACs(self):
+        for k, ac in self.ACs.items():
+            print 'AC', ac.id
+            ac.show_flights()
+
+
 def build_path(paras, vers=main_version, in_title=['Nfp', 'tau', 'par', 'ACtot', 'nA', 'departure_times',\
     'old_style_allocation', 'noise'], rep=result_dir, name_G=None):
     """
@@ -639,7 +648,7 @@ def plot_times_departure(queue, rep='.'):
     plt.savefig(rep + '/departure_times.png')
     plt.show()
 
-def do_standard((paras, G)):
+def do_standard((paras, G), storymode=False):
     """
     Make the simulation and extract aggregate values. Used for automatic entry, 
     in particular by iter_sim.
@@ -669,7 +678,7 @@ def do_standard((paras, G)):
     
     results = {} 
     sim = Simulation(paras, G=G.copy(), verbose=False)
-    sim.make_simu(storymode=False)
+    sim.make_simu(storymode=storymode)
     sim.queue = post_process_queue(sim.queue)
     
     results_queue = extract_aggregate_values_on_queue(sim.queue, paras['par'])

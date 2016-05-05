@@ -119,9 +119,9 @@ class Network_Manager:
                 G.node[a]['load_airport']=[0 for i in range(length_day)]
         else:
             for n in G.nodes():
-                G.node[n]['load_old']=[[0,0],[10**6,0]] 
+                G.node[n]['load']=[[0,0],[10**6,0]] 
             for a in G.airports:
-                G.node[a]['load_old_airport']=[[0,0],[10**6,0]] 
+                G.node[a]['load_airport']=[[0,0],[10**6,0]] 
 
     def build_queue(self, ACs):
         """
@@ -224,9 +224,9 @@ class Network_Manager:
                 first = 0 ###### ATTENTION !!!!!!!!!!!    
                 last = len(path) ########## ATTENTION !!!!!!!!!!!
             
-            j=first
+            j = first
             while j<last and not self.overload_sector(G, path[j],(times[j],times[j+1])):#and self.node[path[j]]['load'][j+time] + 1 <= self.node[path[j]]['capacity']:
-                j+=1 
+                j += 1 
 
             fp.accepted = not ((j<last) or self.overload_airport(G, path[0],(times[0],times[1])) or self.overload_airport(G, path[-1],(times[-2],times[-1])))
                   
@@ -346,9 +346,9 @@ class Network_Manager:
 
         """
         
-        ints = np.array([p[0] for p in G.node[n]['load_old']])
+        ints = np.array([p[0] for p in G.node[n]['load']])
         
-        caps = np.array([p[1] for p in G.node[n]['load_old']])
+        caps = np.array([p[1] for p in G.node[n]['load']])
         i1 = max(0,list(ints>=t1).index(True)-1)
         i2 = list(ints>=t2).index(True)
         
@@ -383,9 +383,9 @@ class Network_Manager:
         Unchanged w.r.t. Model 2.
         """
 
-        ints = np.array([p[0] for p in G.node[n]['load_old_airport']])
+        ints = np.array([p[0] for p in G.node[n]['load_airport']])
         
-        caps = np.array([p[1] for p in G.node[n]['load_old_airport']])
+        caps = np.array([p[1] for p in G.node[n]['load_airport']])
         i1 = max(0,list(ints>=t1).index(True)-1)
         i2 = list(ints>=t2).index(True)
         
@@ -442,7 +442,7 @@ class Network_Manager:
                     G.node[n]['load'][h] += 1
                 h+=1
 
-    def allocate_peaks(self, G, fp, storymode=False):
+    def allocate_peaks(self, G, fp, storymode=False, first=0, last=-1):
         """
         Old version of previous method.
 
@@ -452,20 +452,24 @@ class Network_Manager:
         
         """
 
-        path,times=fp.p,fp.times
-        for i,n in enumerate(path):
-            t1,t2=times[i],times[i+1]
-            ints=np.array([p[0] for p in G.node[n]['load_old']])
-            caps=np.array([p[1] for p in G.node[n]['load_old']])
-            i1=list(ints>=t1).index(True)
-            i2=list(ints>=t2).index(True)
+        path, times = fp.p, fp.times
+        if last==-1: 
+            last = len(path)
+        #for i, n in enumerate(path):
+        for i in range(first, last):
+            n = path[i]
+            t1, t2 = times[i],times[i+1]
+            ints = np.array([p[0] for p in G.node[n]['load']])
+            caps = np.array([p[1] for p in G.node[n]['load']])
+            i1 = list(ints>=t1).index(True)
+            i2 = list(ints>=t2).index(True)
             if ints[i2]!=t2:
-                G.node[n]['load_old'].insert(i2,[t2,caps[i2-1]])
+                G.node[n]['load'].insert(i2,[t2,caps[i2-1]])
             if ints[i1]!=t1:
-                G.node[n]['load_old'].insert(i1,[t1,caps[i1-1]])
-                i2+=1
+                G.node[n]['load'].insert(i1,[t1,caps[i1-1]])
+                i2 += 1
             for k in range(i1,i2):
-                G.node[n]['load_old'][k][1]+=1
+                G.node[n]['load'][k][1] += 1
 
     def deallocate_hours(self, G, fp, first=0, last=-1):
         """
@@ -745,6 +749,9 @@ class FlightPlan:
         """
         self.t += shift
 
+    def __repr__(self):
+        return 'FP with departure ime: ' + str(self.t) + ' ; and path:' + str(self.p)
+
 class Flight:
     """
     Class Flight. 
@@ -906,6 +913,11 @@ class Flight:
     def __repr__(self):
         return 'Flight number ' + str(self.id) + ' from AC number ' + str(self.ac_id) +\
             ' from ' + str(self.source) + ' to ' + str(self.destination)
+
+    def show_fps(self):
+        print 'flight', self.id, 'with parameters', self.par
+        for fp in self.FPs:
+            print fp
         
 class AirCompany:
     """
@@ -990,6 +1002,10 @@ class AirCompany:
 
     def __repr__(self):
         return 'AC with para ' + str(self.par)
+
+    def show_flights(self):
+        for f in self.flights:
+            f.show_fps()
         
 class Net(nx.Graph):
     """
@@ -1005,6 +1021,22 @@ class Net(nx.Graph):
     
     def __init__(self):
         super(Net, self).__init__()
+
+    def describe(self, level=0):
+        print "Net", self.name
+        print "================"
+        print "Number of nodes:", len(self.nodes())
+        print "Number of airports:", len(self.get_airports())
+        print "Number of connections:", len(self.connections())
+        if level>0:
+            print "Airports:", self.get_airports()
+            print "Connections:", self.connections()
+        if level>1:
+            print "Shortest paths with weights:"
+            for k, v in self.short.items():
+                print k, ':'
+                for p in v:
+                    print ' - ', p, len(p), self.weight_path(p)
     
     def add_airports(self, airports, min_dis, pairs=[], C_airport=10, singletons=False):
         """

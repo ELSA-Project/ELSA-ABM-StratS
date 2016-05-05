@@ -764,6 +764,8 @@ if  __name__=='__main__':
     # Canonical run:
     # python prepare_network.py [path to paras_G] [path for saving files]
     # If the path of saveing files is omitted, the path is [results_dir]/networks/
+    # Ex:
+    # python prepare_network.py my_paras/my_paras_G_DiskWorld_medium.py /home/earendil/Documents/ELSA/ABM/results_new/networks
     
     if 1:
         # Manual seed

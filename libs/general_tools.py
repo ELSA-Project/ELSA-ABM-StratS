@@ -7,6 +7,7 @@ This is a general tool file.
 
 import numpy as np
 import os
+from os.path import join as jn
 import sys
 from time import gmtime, strftime
 from scipy.misc import comb
@@ -28,6 +29,8 @@ from numpy.random import randint
 from math import *
 import networkx as nx
 import matplotlib.pyplot as plt
+import smtplib
+import pandas as pd
 
 from math import sqrt
 
@@ -524,16 +527,56 @@ def save_fig(plot):
     Automatic saving for plots.
     """
     def wrapper(*args, **kwargs):
-        rep = kwargs['rep']
-        kwargs.pop('rep', None)
-        suffix = kwargs['suffix']
-        kwargs.pop('suffix', None)
+        if 'rep' in kwargs.keys():
+            rep = kwargs['rep']
+            kwargs.pop('rep', None)
+        else:
+            rep = '.'
+        
+        if 'name' in kwargs.keys():
+            name = kwargs['name']
+            kwargs.pop('name', None)
+        else:
+            name = plot.func_name
+
+        if 'suffix' in kwargs.keys():
+            suffix = kwargs['suffix']
+            kwargs.pop('suffix', None)
+            name += '_' + suffix
+
+        if 'save' in kwargs.keys():
+            save = kwargs['save']
+            kwargs.pop('save', None)
+        else:
+            save = True
+
+        name += '.png'
+
         ret = plot(*args, **kwargs)
-        if rep!='':
-            plt.savefig(rep + '/' + plot.func_name + '_' + suffix + '.png')
-            print 'Saved in', rep + '/' + plot.func_name + '_' + suffix + '.png'
+        
+        full_path = jn(rep, name)
+        
+        if save:
+            plt.savefig(full_path)
+            print 'Saved as', full_path
         return ret
     return wrapper
+
+# def save_fig(plot):
+#     """
+#     Automatic saving for plots.
+#     """
+#     def wrapper(*args, **kwargs):
+#         rep = kwargs['rep']
+#         kwargs.pop('rep', None)
+#         suffix = kwargs['suffix']
+#         kwargs.pop('suffix', None)
+#         ret = plot(*args, **kwargs)
+#         if rep!='':
+#             plt.savefig(rep + '/' + plot.func_name + '_' + suffix + '.png')
+#             print 'Saved in', rep + '/' + plot.func_name + '_' + suffix + '.png'
+#         return ret
+#     return wrapper
 
 def make_union_interval(intervals):
     """
@@ -577,7 +620,13 @@ def sort_lists(list1, list2):
 def fit(x, y, first_point = 0, last_point = -1, f_fit = None, p0 = None):
     """
     Simple function for linear fit.
+
+    Can plot output with 
+    plot(x, y)
+    plot(x, vectorize(f_fit_opt)(y))
+    
     """
+    
     if f_fit ==None:
         def f_fit(x,a,b):
             return a + b*x
@@ -909,6 +958,11 @@ def simple_color_map_function(color1, color2, min_value=0., max_value=1.):
     """
     Build a function for simple linear interpolation between two colors.
     """
+    if type(color1) in [str, unicode]:
+        color1 = hex_to_rgb(color1)
+    if type(color2) in [str, unicode]:
+        color2 = hex_to_rgb(color2)
+
     def f(value):
         norm_value = (float(max_value)-float(value))/(float(max_value)-float(min_value))
         return np.average(np.array([color1, color2]), axis=0, weights=[norm_value, 1. - norm_value])
@@ -1084,6 +1138,51 @@ def build_triangular(N, x_shift=0., y_shift=0., side=1.):
                 G.add_edge(n,m)
 
     return G
+
+def send_email(subject="Simulations done", receivers=['g.gurtner@westminster.ac.uk'], sender='gurtner.gerald@gmail.com',\
+    text="Done!", pwd=''):
+
+    #
+
+    body = "From: %s \r\n" % sender
+    body += "To: %s \r\n" % receivers[0]
+    body += "Subject: %s \r\n" % subject
+    body += "\r\n"
+    body += text
+
+    server = smtplib.SMTP('smtp.gmail.com', 587)
+    server.starttls()
+    server.login('gurtner.gerald', pwd)
+    server.sendmail(sender, receivers, body)         
+    server.quit()
+    print "Successfully sent email"
+
+@contextlib.contextmanager
+def send_email_when_ready(do=True, **kwargs):
+    """
+    Useful for sending email when simulations are finished.
+    """
+    if do:
+        pwd = raw_input('Type password for sending email\n')
+    yield
+    if do:
+        send_email(pwd=pwd, **kwargs)
+
+def plot_nice_colors():
+    figure(figsize=(15, 7))
+    for i, color in enumerate(nice_colors):
+        print hex_to_rgb(color)
+        plot([i], [0.], color=hex_to_rgb(color), marker='o', ms=100)
+    xlim(-1, 7)
+
+def restrict_to(dg, fixed_values={}):
+    """
+    Restrict Dataframe to the given values.
+    """
+    msks = [dg[k]==v for k, v in fixed_values.items()]
+    msk = pd.concat(msks, axis=1)
+    slct = msk.all(axis=1)
+    return dg.ix[slct]
 
 if __name__=='__main__':
     G = build_triangular(5)

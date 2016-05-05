@@ -484,9 +484,9 @@ def just_legend(list_results_r, paras, met='satisfaction', name='', rep='.'):
 #        
 #    plt.legend(leg)    
 #    plt.savefig(rep + name + ".png")   
-	
+
 def normalized_met_vs_par(results, paras, met='satisfaction', name='', rep='.', labelx='', labely='', loc=3, xlim=None, ylim=None,\
-						figsize=(10, 7), reduce_plot_x=0.):
+	figsize=(10, 7), reduce_plot_x=0.):
 	"""
 	Same as previous one, for normalized satisfaction.
 	"""
