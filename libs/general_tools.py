@@ -985,11 +985,17 @@ def move_legend(leg, xOffset):
     return leg
 
 def _pre_compute_positions(G, colors='r', limits=(0,0,0,0), size_nodes=1., size_edges=2., nodes=[], edges=True, 
-    key_word_weight='weight', z_order_nodes=6, diff_edges=False):
+    key_word_weight='weight', z_order_nodes=6, diff_edges=False, coords_in_minutes=True):
     
     """
     Used for plotting different maps.
+    NOTHING IS PROJECTED HERE.
     """
+
+    if coords_in_minutes:
+        unit = 60.
+    else:
+        unit = 1.
 
     def width(x,maxx, scale=2.):
         return scale*x/maxx#+0.02#0.2
@@ -998,26 +1004,26 @@ def _pre_compute_positions(G, colors='r', limits=(0,0,0,0), size_nodes=1., size_
     if nodes == []:
         nodes = G.nodes()
     if limits==(0,0,0,0):
-        limits = (min([G.node[n]['coord'][0]/60. for n in nodes]) - 0.2,
-                min([G.node[n]['coord'][1]/60. for n in nodes]) - 0.2,
-                max([G.node[n]['coord'][0]/60. for n in nodes]) + 0.2,
-                max([G.node[n]['coord'][1]/60. for n in nodes]) + 0.2)
+        limits = (min([G.node[n]['coord'][0]/unit for n in nodes]) - 0.2,
+                min([G.node[n]['coord'][1]/unit for n in nodes]) - 0.2,
+                max([G.node[n]['coord'][0]/unit for n in nodes]) + 0.2,
+                max([G.node[n]['coord'][1]/unit for n in nodes]) + 0.2)
         restrict_nodes = False
 
     if nodes==[]:
         if restrict_nodes:
             # Restrict nodes to geometrical extent of the zone.
-            nodes = [n for n in G.nodes() if limits[0]-0.2<=G.node[n]['coord'][0]/60.<=limits[2]+0.2 and limits[1]-0.2<=G.node[n]['coord'][1]/60.<=limits[3]+0.2]
+            nodes = [n for n in G.nodes() if limits[0]-0.2<=G.node[n]['coord'][0]/unit<=limits[2]+0.2 and limits[1]-0.2<=G.node[n]['coord'][1]/unit<=limits[3]+0.2]
         else:
             nodes = G.nodes()
 
-    if type(colors)==type({}):
+    if type(colors)==dict:
         colors = [colors[n] for n in nodes]
 
-    if type(z_order_nodes)==type({}):
+    if type(z_order_nodes)==dict:
         z_order_nodes = [z_order_nodes[n] for n in nodes]
 
-    if type(size_nodes)==type(1) or type(size_nodes)== type(1.):
+    if type(size_nodes) in [int, float]:
         size_nodes = [size_nodes for n in nodes]
     elif size_nodes==[]:
         size_nodes = [1 for n in nodes]
@@ -1028,10 +1034,11 @@ def _pre_compute_positions(G, colors='r', limits=(0,0,0,0), size_nodes=1., size_
             size_nodes=[G.degree(n)*size_nodes[1] for n in nodes]
         else:
             Exception("The following size function is not implemented:" + size_nodes)
-    elif type(size_nodes)==type({}):
+    elif type(size_nodes)==dict:
         size_nodes=[size_nodes[n] for n in nodes]
         
-    max_wei = max([abs(G[e[0]][e[1]][key_word_weight]) for e in G.edges() if e[0] in nodes and e[1] in nodes])
+    if key_word_weight!=None:
+        max_wei = max([abs(G[e[0]][e[1]][key_word_weight]) for e in G.edges() if e[0] in nodes and e[1] in nodes])
     edges_positions, edges_width, edges_colors = [], [], []
     if edges:
         for e in G.edges():
@@ -1040,35 +1047,49 @@ def _pre_compute_positions(G, colors='r', limits=(0,0,0,0), size_nodes=1., size_
                     color = 'r' if G[e[0]][e[1]][key_word_weight]>0 else 'b'
                 else:
                     color = 'k'
-                #xe1,ye1 = m(G.node[e[0]]['coord'][1]/60.,G.node[e[0]]['coord'][0]/60.)
-                xe1, ye1 = (G.node[e[0]]['coord'][0]/60., G.node[e[0]]['coord'][1]/60.)
-                #xe2,ye2 = m(G.node[e[1]]['coord'][1]/60.,G.node[e[1]]['coord'][0]/60.)
-                xe2,ye2 = (G.node[e[1]]['coord'][0]/60., G.node[e[1]]['coord'][1]/60.)
+                #xe1,ye1 = m(G.node[e[0]]['coord'][1]/unit,G.node[e[0]]['coord'][0]/unit)
+                xe1, ye1 = (G.node[e[0]]['coord'][0]/unit, G.node[e[0]]['coord'][1]/unit)
+                #xe2,ye2 = m(G.node[e[1]]['coord'][1]/unit,G.node[e[1]]['coord'][0]/unit)
+                xe2,ye2 = (G.node[e[1]]['coord'][0]/unit, G.node[e[1]]['coord'][1]/unit)
                 edges_positions.append(([xe1, xe2], [ye1, ye2]))
-                edges_width.append(width(G[e[0]][e[1]][key_word_weight], max_wei, scale=size_edges))
+                if key_word_weight!=None:
+                    edges_width.append(width(G[e[0]][e[1]][key_word_weight], max_wei, scale=size_edges))
+                else:
+                    edges_width.append(size_edges)
                 edges_colors.append(color)
         
     return nodes, limits, colors, z_order_nodes, size_nodes, edges_positions, edges_width, edges_colors
 
 def map_of_net(G, colors='r', limits=(0,0,0,0), title='', size_nodes=1., size_edges=2., nodes=[], zone_geo=[], edges=True, fmt='svg', dpi=100, \
-    save_file=None, show=True, figsize=(9,6), background_color='white', key_word_weight='weight', z_order_nodes=6, diff_edges=False, lw_map=0.8,\
-    draw_mer_par=True):
+    save_file=None, show=True, figsize=(9,6), background_color='white', key_word_weight=None, z_order_nodes=6, diff_edges=False, lw_map=0.8,\
+    draw_mer_par=True, ax=None, coords_in_minutes=True, use_basemap=False, split_nodes_by=0.):
     
     nodes, (x_min, y_min, x_max, y_max), colors, z_order_nodes, size_nodes, edges_positions, edge_width, edges_colors = _pre_compute_positions(G, colors=colors, limits=limits, size_nodes=size_nodes, nodes=nodes, edges=edges, 
-    key_word_weight=key_word_weight, z_order_nodes=z_order_nodes, diff_edges=diff_edges)
-    
+    key_word_weight=key_word_weight, z_order_nodes=z_order_nodes, diff_edges=diff_edges, coords_in_minutes=coords_in_minutes, size_edges=size_edges)
+
     #x_min, y_min, x_max, y_max = limits
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
-    #ax = plt.subplot()
-    ax.set_aspect(figsize[0]/figsize[1])
-    ax.set_title(title)
+    if ax==None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+        #ax = plt.subplot()
+        ax.set_aspect(figsize[0]/figsize[1])
+        ax.set_title(title)
     
     # Make basemap
-    m = draw_zonemap(x_min, y_min, x_max, y_max, 'i', sea_color=background_color, continents_color=background_color, lake_color=background_color,\
+    if not use_basemap:
+        def m(a, b):
+            return b, a
+        ax.set_xlim((x_min, x_max))
+        ax.set_ylim((y_min, y_max))
+    else:
+        m = draw_zonemap(x_min, y_min, x_max, y_max, 'i', sea_color=background_color, continents_color=background_color, lake_color=background_color,\
                                                     lw=lw_map, draw_mer_par=draw_mer_par)
     # Convert coordinates
-    x, y = split_coords(G, nodes, r=0.1)
+    if split_nodes_by>0.:
+        x, y = split_coords(G, nodes, r=split_nodes_by)
+    else:
+        x, y = zip(*[G.node[n]['coord'] for n in nodes])
+
     x, y = m(y,x)
     
     # Draw nodes
@@ -1091,6 +1112,39 @@ def map_of_net(G, colors='r', limits=(0,0,0,0), title='', size_nodes=1., size_ed
     if show:
         plt.show()
 
+    return ax
+
+def split_coords(G, nodes, r=0.04):
+    lines=[]
+    for n in G.nodes():
+        if n in nodes:
+            added=False
+            for l in lines:
+                if sqrt((G.node[n]['coord'][0] - G.node[l[0]]['coord'][0])**2 + (G.node[n]['coord'][1] - G.node[l[0]]['coord'][1])**2)<1.: #nodes closer than 0.1 degree
+                    l.append(n)
+                    added=True
+            if not added:
+                lines.append([n])
+    
+    for l in lines[:]:
+        if len(l)==1:
+            lines.remove(l)
+
+    pouet={}
+    for l in lines:
+        for n in l:
+            pouet[n]=l
+    x,y=[],[]
+    for n in nodes:
+        if not n in pouet.keys():
+            x.append(G.node[n]['coord'][0]/60.)
+            y.append(G.node[n]['coord'][1]/60.)
+        else:
+            l=pouet[n]
+            theta=2.*pi*float(l.index(n))/float(len(l))
+            x.append(G.node[n]['coord'][0]/60. + r*cos(theta))
+            y.append(G.node[n]['coord'][1]/60. + r*sin(theta))
+    return x,y
 # def plot_nodes(data, ax=None, lw=1., **kwargs):
 #     if ax is None:
 #         ax = plt.gca()

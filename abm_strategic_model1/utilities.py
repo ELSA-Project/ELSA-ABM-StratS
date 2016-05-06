@@ -10,16 +10,19 @@ Utilies for the ABM.
 from mpl_toolkits.basemap import Basemap
 from math import sqrt, cos, sin, pi, ceil
 import numpy as np
+from numpy import *
 import matplotlib.gridspec as gridspec
 #from descartes import PolygonPatch
 import matplotlib.pyplot as plt
 import pickle
 import imp
 
+from general_tools import split_coords, map_of_net, nice_colors
+
 version='3.0.0'
 
 def draw_network_map(G, title='Network map', queue=[], rep='./',airports=True, load=True,
-             generated=False, file_save=None, colors_nodes='b', size=10, dpi=300):
+    generated=False, file_save=None, colors_nodes='b', size=10, dpi=300):
     x_min=min([G.node[n]['coord'][0]/60. for n in G.nodes()])-0.5
     x_max=max([G.node[n]['coord'][0]/60. for n in G.nodes()])+0.5
     y_min=min([G.node[n]['coord'][1]/60. for n in G.nodes()])-0.5
@@ -39,70 +42,72 @@ def draw_network_map(G, title='Network map', queue=[], rep='./',airports=True, l
         m=draw_zonemap(x_min,y_min,x_max,y_max,'i')
         x,y=split_coords(G,G.nodes(),r=0.08)
     
-#        for n in self.nodes():
-#            print self.node[n]['load']
-#            print [self.node[n]['load'][i][1] for i in range(len(self.node[n]['load'])-1)]
-    if load:
-        sze = [(np.average([G.node[n]['load'][i][1] for i in range(len(G.node[n]['load'])-1)],\
-        weights=[(G.node[n]['load'][i+1][0] - G.node[n]['load'][i][0]) for i in range(len(G.node[n]['load'])-1)])
-        /float(G.node[n]['capacity'])*800 + 5) for n in G.nodes()]
-    else:
-        sze = size
+    #     for n in self.nodes():
+    #         print self.node[n]['load']
+    #         print [self.node[n]['load'][i][1] for i in range(len(self.node[n]['load'])-1)]
+    # if load:
+    #     sze = [(np.average([G.node[n]['load'][i][1] for i in range(len(G.node[n]['load'])-1)],\
+    #     weights=[(G.node[n]['load'][i+1][0] - G.node[n]['load'][i][0]) for i in range(len(G.node[n]['load'])-1)])
+    #     /float(G.node[n]['capacity'])*800 + 5) for n in G.nodes()]
+    # else:
+    #     sze = size
         
-    coords={n:m(y[i],x[i]) for i,n in enumerate(G.nodes())}
+    # coords={n:m(y[i],x[i]) for i,n in enumerate(G.nodes())}
     
-    ax.set_title(title)
-    #sca = ax.scatter([self.node[n]['coord'][0] for n in self.nodes()],[self.node[n]['coord'][0] for n in self.nodes()],marker='o',zorder=6,s=sze)#,s=snf,lw=0,c=[0.,0.45,0.,1])
-    nodes = G.nodes()[:]
-    if type(colors_nodes)==type({1:1}):
-        colors_nodes = [colors_nodes[n] for n in nodes]
-    sca=ax.scatter([coords[n][0] for n in nodes], [coords[n][1] for n in nodes], marker='o', zorder=6, s=sze, c=colors_nodes)#,s=snf,lw=0,c=[0.,0.45,0.,1])
-    if airports:
-        scairports=ax.scatter([coords[n][0] for n in G.airports],[coords[n][1] for n in G.airports], marker='s', zorder=7, s=sze, c='g')#,s=snf,lw=0,c=[0.,0.45,0.,1])
-#        scaa=ax.scatter(x_a,y_a,marker='s',zorder=5,s=sna,c=[0.7,0.133,0.133,1],edgecolor=[0,0,0,1],lw=0.7)
-#        scat = ax.scatter(x_m1t,y_m1t,marker='d',zorder=6,s=snt,lw=0,c=[0.,0.45,0.,1])
+    # ax.set_title(title)
+    # #sca = ax.scatter([self.node[n]['coord'][0] for n in self.nodes()],[self.node[n]['coord'][0] for n in self.nodes()],marker='o',zorder=6,s=sze)#,s=snf,lw=0,c=[0.,0.45,0.,1])
+    # nodes = G.nodes()[:]
+    # if type(colors_nodes)==type({1:1}):
+    #     colors_nodes = [colors_nodes[n] for n in nodes]
+    # sca=ax.scatter([coords[n][0] for n in nodes], [coords[n][1] for n in nodes], marker='o', zorder=6, s=sze, c=colors_nodes)#,s=snf,lw=0,c=[0.,0.45,0.,1])
+    # if airports:
+    #     scairports=ax.scatter([coords[n][0] for n in G.airports],[coords[n][1] for n in G.airports], marker='s', zorder=7, s=sze, c='g')#,s=snf,lw=0,c=[0.,0.45,0.,1])
+    #     scaa=ax.scatter(x_a,y_a,marker='s',zorder=5,s=sna,c=[0.7,0.133,0.133,1],edgecolor=[0,0,0,1],lw=0.7)
+    #     scat = ax.scatter(x_m1t,y_m1t,marker='d',zorder=6,s=snt,lw=0,c=[0.,0.45,0.,1])
 
-    if 1:
-        for e in G.edges():
-            #if G.node[e[0]]['m1'] and G.node[e[1]]['m1']:
-                #print e,width(G[e[0]][e[1]]['weight'])
-#                    xe1,ye1=m(self.node[e[0]]['coord'][1]/60.,self.node[e[0]]['coord'][0]/60.)
-#                    xe2,ye2=m(self.node[e[1]]['coord'][1]/60.,self.node[e[1]]['coord'][0]/60.)
-                plt.plot([coords[e[0]][0],coords[e[1]][0]],[coords[e[0]][1],coords[e[1]][1]],'k-',lw=0.5)#,lw=width(G[e[0]][e[1]]['weight'],max_wei),zorder=4)
+    # if 1:
+    #     for e in G.edges():
+    #         #if G.node[e[0]]['m1'] and G.node[e[1]]['m1']:
+    #             #print e,width(G[e[0]][e[1]]['weight'])
+    #                 xe1,ye1=m(self.node[e[0]]['coord'][1]/60.,self.node[e[0]]['coord'][0]/60.)
+    #                 xe2,ye2=m(self.node[e[1]]['coord'][1]/60.,self.node[e[1]]['coord'][0]/60.)
+    #             plt.plot([coords[e[0]][0],coords[e[1]][0]],[coords[e[0]][1],coords[e[1]][1]],'k-',lw=0.5)#,lw=width(G[e[0]][e[1]]['weight'],max_wei),zorder=4)
           
-    weights={n:{v:0. for v in G.neighbors(n)} for n in G.nodes()}
-    for f in queue:
-        try:
-            path=f.FPs[[fpp.accepted for fpp in f.FPs].index(True)].p
-            for i in range(0,len(path)-1):
-                weights[path[i]][path[i+1]]+=1.
-        except ValueError:
-            pass
-        except:
-            raise
+    # weights={n:{v:0. for v in G.neighbors(n)} for n in G.nodes()}
+    # for f in queue:
+    #     try:
+    #         path=f.FPs[[fpp.accepted for fpp in f.FPs].index(True)].p
+    #         for i in range(0,len(path)-1):
+    #             weights[path[i]][path[i+1]]+=1.
+    #     except ValueError:
+    #         pass
+    #     except:
+    #         raise
     
-    max_w=np.max([w for vois in weights.values() for w in vois.values()])
+    # max_w=np.max([w for vois in weights.values() for w in vois.values()])
     
-    print 'max_w', max_w
+    # print 'max_w', max_w
     
-    for n,vois in weights.items():
-        for v,w in vois.items():
-#            if G.node[n]['m1'] and G.node[v]['m1']:
-                plt.plot([coords[n][0],coords[v][0]],[coords[n][1],coords[v][1]],'r-',lw=w/max_w*4.)#,lw=width(G[e[0]][e[1]]['weight'],max_wei),zorder=4)
+    # for n,vois in weights.items():
+    #     for v,w in vois.items():
+    #         if G.node[n]['m1'] and G.node[v]['m1']:
+    #plt.plot([coords[n][0],coords[v][0]],[coords[n][1],coords[v][1]],'r-',lw=w/max_w*4.)#,lw=width(G[e[0]][e[1]]['weight'],max_wei),zorder=4)
 
-#        if 0:
-#            patch=PolygonPatch(adapt_shape_to_map(zone_geo,m),facecolor='grey', edgecolor='grey', alpha=0.08,zorder=3)#edgecolor='grey', alpha=0.08,zorder=3)
-#            ax.add_patch(patch)
-#            
-#        if 0:
-#            patch=PolygonPatch(adapt_shape_to_map(expand(zone_geo,0.005),m),facecolor='brown', edgecolor='black', alpha=0.1,zorder=3)#edgecolor='grey', alpha=0.08,zorder=3)
-#            ax.add_patch(patch)
-    if file_save!=None:
-        plt.savefig(file_save, dpi=dpi)
-        print "Graph saved as",file_save
-    plt.show()
+    #     if 0:
+    #         patch=PolygonPatch(adapt_shape_to_map(zone_geo,m),facecolor='grey', edgecolor='grey', alpha=0.08,zorder=3)#edgecolor='grey', alpha=0.08,zorder=3)
+    #         ax.add_patch(patch)
+            
+    #     if 0:
+    #         patch=PolygonPatch(adapt_shape_to_map(expand(zone_geo,0.005),m),facecolor='brown', edgecolor='black', alpha=0.1,zorder=3)#edgecolor='grey', alpha=0.08,zorder=3)
+    #         ax.add_patch(patch)
+    # if file_save!=None:
+    #     plt.savefig(file_save, dpi=dpi)
+    #     print "Graph saved as",file_save
+    # plt.show()
 
-def draw_network_map_bis(G, title='Network map', trajectories=[], rep='./',airports=True, load=True, generated=False, add_to_title='', polygons=[], numbers=False, show=True, colors='b'):
+def draw_network_map_bis(G, title='Network map', trajectories=[], rep='./',
+    airports=True, load=True, generated=False, add_to_title='', polygons=[], 
+    numbers=False, show=True, colors='b'):
     print "Drawing network..."
     x_min=min([G.node[n]['coord'][0]/60. for n in G.nodes()])-0.5
     x_max=max([G.node[n]['coord'][0]/60. for n in G.nodes()])+0.5
@@ -115,7 +120,6 @@ def draw_network_map_bis(G, title='Network map', trajectories=[], rep='./',airpo
     gs = gridspec.GridSpec(1, 2,width_ratios=[6.,1.])
     ax = plt.subplot(gs[0])
     ax.set_aspect(1./0.8)
-
     
     if generated:
         def m(a,b):
@@ -180,38 +184,45 @@ def draw_network_map_bis(G, title='Network map', trajectories=[], rep='./',airpo
     if show:
         plt.show()
 
-def split_coords(G,nodes,r=0.04):
-    lines=[]
-    for n in G.nodes():
-        if n in nodes:
-            added=False
-            for l in lines:
-                if sqrt((G.node[n]['coord'][0] - G.node[l[0]]['coord'][0])**2 + (G.node[n]['coord'][1] - G.node[l[0]]['coord'][1])**2)<1.: #nodes closer than 0.1 degree
-                    l.append(n)
-                    added=True
-            if not added:
-                lines.append([n])
-    
-    for l in lines[:]:
-        if len(l)==1:
-            lines.remove(l)
+def draw_sector_map(G, ax=None, save_file=None, fmt='png', load=False, airports=False, \
+    polygons=False, show=False, size_airports=30, color_airports=nice_colors[6], \
+    shift_numbers=(0., 0.), numbers=False, size_numbers=10, **kwargs):
+    if ax==None:
+        fig=plt.figure(figsize=(9,6))#*(y_max-y_min)/(x_max-x_min)))#,dpi=600)
+        gs = gridspec.GridSpec(1, 2, width_ratios=[6.,1.])
+        ax = plt.subplot(gs[0])
+        ax.set_aspect(1./0.8)
 
-    pouet={}
-    for l in lines:
-        for n in l:
-            pouet[n]=l
-    x,y=[],[]
-    for n in nodes:
-        if not n in pouet.keys():
-            x.append(G.node[n]['coord'][0]/60.)
-            y.append(G.node[n]['coord'][1]/60.)
-        else:
-            l=pouet[n]
-            theta=2.*pi*float(l.index(n))/float(len(l))
-            x.append(G.node[n]['coord'][0]/60. + r*cos(theta))
-            y.append(G.node[n]['coord'][1]/60. + r*sin(theta))
-    return x,y
+    if load:
+        kwargs['size_nodes'] = 'load'
     
+    kwargs['save_file'] = None
+    kwargs['show'] = False
+
+    ax = map_of_net(G, ax=ax, **kwargs)
+
+    if airports:
+        lis = [G.node[n]['coord'] for n in G.get_airports()]
+        scairports = ax.scatter(*zip(*lis), marker='s', zorder=6, s=size_airports, c=color_airports, edgecolor='w')#,s=snf,lw=0,c=[0.,0.45,0.,1])
+
+    if polygons:
+        for i, pol in enumerate(G.polygons):
+            patch = PolygonPatch(pol, alpha=0.5, zorder=2, color=_colors[i%len(_colors)])
+            ax.add_patch(patch)
+    if numbers:
+        for n in G.nodes():
+            pos_point = array(G.node[n]['coord'])
+            pos_text = pos_point + array(shift_numbers)
+            ax.annotate(str(n), pos_point, size=size_numbers, xytext=pos_text)
+
+    if save_file!=None:
+        plt.savefig(save_file + '.' + fmt, dpi = dpi)
+        print 'Figure saved as', save_file + '.' + fmt
+    if show:
+        plt.show()
+
+    return ax
+
 def draw_zonemap(x_min,y_min,x_max,y_max,res):
     m = Basemap(projection='gall',lon_0=0.,llcrnrlon=y_min,llcrnrlat=x_min,urcrnrlon=y_max,urcrnrlat=x_max,resolution=res)
     m.drawmapboundary(fill_color='white') #set a background colour
