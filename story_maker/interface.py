@@ -4,7 +4,7 @@ sys.path.insert(1, '..')
 sys.path.insert(1, '../abm_strategic_model1')
 
 import pickle
-from math import *
+from numpy import *
 from numpy.random import lognormal, normal
 import networkx as nx
 
@@ -41,20 +41,19 @@ def load_network():
 	return G
 
 class StrategicGUI(QMainWindow, design.Ui_MainWindow):
-	def __init__(self, parent=None, simu=None):
+	def __init__(self, parent=None, simu=None, epsilon=0.05):
 		super(StrategicGUI, self).__init__(parent)
 		self.setupUi(self)
 
 		self.prepare_main_frame()
+		self.epsilon = epsilon
 
-		#self.pause.clicked.connect(self.print_stuff)
 		self.pause.clicked.connect(self.pause_simulation)
 		self.play.clicked.connect(self.play_simulation)
 		self.play_one_step.clicked.connect(self.play_one_step_simulation)
 
 		#self.main_splitter.setStretchFactor(1, 10)
-		# These are not working properly
-		#self.main_splitter.setSizes([2, 1])
+		# These are pixels!
 		self.main_splitter.setSizes([600, 200])
 		self.text_splitter.setSizes([400, 200])
 
@@ -62,8 +61,31 @@ class StrategicGUI(QMainWindow, design.Ui_MainWindow):
 		self.simu.prepare_simu()
 		self.G = self.simu.G
 
-		#self.G = load_network()
 		self.draw_network()
+
+	def on_click(self, event):
+		if event.button!=1:
+			return
+		else:
+			sec = self.get_ind_under_point(event)
+			if sec!=None:
+				text = "Load of sector " + str(sec) + " is:\n"
+				for h in range(len(self.G.node[sec]['load'])-1):
+					text += '- ' + str(self.G.node[sec]['load'][h]) + " for interval " + str(h) + " -- " + str(h+1) + "\n"
+				self.print_information(text)
+
+	def get_ind_under_point(self, event):
+		'get the index of the vertex under point if within epsilon tolerance'
+
+		xt, yt = zip(*[self.G.node[n]['coord'] for n in self.G.nodes()])#xyt[:, 0], xyt[:, 1]
+		d = sqrt((array(xt) - event.xdata)**2 + (array(yt) - event.ydata)**2)
+		indseq = nonzero(equal(d, amin(d)))[0]
+		ind = indseq[0]
+
+		if d[ind] >= self.epsilon:
+			ind = None
+
+		return ind
 
 	def print_information(self, text):
 		self.information.append(text)
@@ -169,10 +191,6 @@ class StrategicGUI(QMainWindow, design.Ui_MainWindow):
 		self.print_information('Not implemented yet')
 
 	def play_one_step_simulation(self):
-		#self.print_information('Trying to draw something')
-		#self.on_draw_test()
-		#self.draw_network()
-		#self.draw_trajectory([3, 18, 17, 15])
 		map_update_info, text_story, text_info = self.simu.step()
 		self.update_map(**map_update_info)
 		self.print_story(text_story)
@@ -186,11 +204,18 @@ class StrategicGUI(QMainWindow, design.Ui_MainWindow):
 				self.indicate_origin_destination(*origin_destination)
 		else:
 			self.draw_network()
+
 	def prepare_main_frame(self):
 		self.dpi = 100
 		self.fig = Figure((11.0, 8.0), dpi=self.dpi)
 		self.canvas = FigureCanvas(self.fig)
 		self.canvas.setParent(self.main_frame)
+
+		self.canvas.setFocusPolicy(Qt.ClickFocus)
+		self.canvas.setFocus()
+		# to capture keyboard
+		#self.canvas.mpl_connect('key_press_event', self.pouet)
+		self.canvas.mpl_connect('button_press_event', self.on_click)
 
 		# Since we have only one plot, we can use add_axes 
 		# instead of add_subplot, but then the subplot
