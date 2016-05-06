@@ -72,12 +72,13 @@ class SimulationStory(Simulation):
 			else:
 				return self.next_flight()
 			
-
 	def next_flight_plan(self, G):
-		text_info = ''
 		i = self.current_flight_plan_index
 		flight = self.queue[self.current_flight_index]
 
+		text_info = ''
+		map_update_info = {'origin_destination':(flight.source, flight.destination)}
+		
 		fp = flight.FPs[i]
 		self.NM.compute_flight_times(G, fp)
 		path, times = fp.p, fp.times
@@ -102,23 +103,27 @@ class SimulationStory(Simulation):
 		#print "FP has been accepted:", fp.accepted
 		text_story = " - FP " + str(i) + " with departure time t0 + " +\
 					str(fp.t) + "min tried to be allocated "
+		map_update_info['trajectory'] = fp.p
 		if not fp.accepted:
 			text_story += "but has been rejected because "
-			map_update_info = {'trajectory':fp.p, 'color_trajectory':'r'}
+			map_update_info['color_trajectory'] = 'r'
 			if path_overload: 
 				text_story += "sector " + str(path[j]) + " was full."
+				map_update_info['overloaded_sector'] = path[j]
 				#self.show_sector(self, path[j])
 			if source_overload:
 				text_story += "because origin airport was full."
+				map_update_info['overloaded_sector'] = path[0]
 				#print G.node[path[0]]['load_airport']
 				#print G.node[path[0]]['capacity_airport']
 				#self.show_sector(self, path[0])
 			if desetination_overload:
 				text_story += "because destination airport was full."
+				map_update_info['overloaded_sector'] = path[-1]
 
 		if fp.accepted:
 			text_story += "and has been allocated.\n"
-			map_update_info = {'trajectory':fp.p, 'color_trajectory':'g'}
+			map_update_info['color_trajectory'] = 'g'
 			self.NM.allocate(G, fp, first=first, last=last)
 			flight.fp_selected = fp
 			flight.accepted = True

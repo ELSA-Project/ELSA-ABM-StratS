@@ -172,17 +172,27 @@ class StrategicGUI(QMainWindow, design.Ui_MainWindow):
 		TODO: not working with projection.
 
 		"""
-
-		self.draw_network(display=False)
 		x, y = zip(*[self.G.node[n]['coord'] for n in p])
 		self.axes.plot(x, y, '-', lw=2, c=color)
-		self.canvas.draw()
 
-	def indicate_origin_destination(self, origin, destination, size=15., color=nice_colors[6], marker='h'):
-		self.draw_network(display=False)
-		x, y = zip(*[self.G.node[n]['coord'] for n in [origin, destination]])
-		self.axes.plot(x, y, marker, ms=size, c=color, zorder=10)
-		self.canvas.draw()
+	def draw_overloaded_sector(self, sec, size=150., color=nice_colors[2]):
+		x, y = self.G.node[sec]['coord']
+		self.axes.scatter([x], [y], marker='o', s=size, c=color, edgecolor='w', zorder=10)
+
+	def indicate_origin_destination(self, origin, destination, size=400., \
+		color=nice_colors[6], marker='h', fontsize=10, shift_numbers=(-0.015, -0.015)):
+		x, y = self.G.node[origin]['coord']
+		self.axes.scatter([x], [y], marker=marker, s=size, c=color, edgecolor='w', zorder=10)
+		pos_text = array((x, y)) + array(shift_numbers)
+		self.axes.annotate('O', (x,y), size=fontsize, xytext=pos_text, zorder=11, color='w')
+
+		x, y = self.G.node[destination]['coord']
+		self.axes.scatter([x], [y], marker=marker, s=size, c=color, edgecolor='w', zorder=10)
+		pos_text = array((x, y)) + array(shift_numbers)
+		self.axes.annotate('D', (x,y), size=fontsize, xytext=pos_text, zorder=11, color='w')
+
+		# x, y = zip(*[self.G.node[n]['coord'] for n in [origin, destination]])
+		# self.axes.plot(x, y, marker, ms=size, c=color, zorder=10)
 
 	def pause_simulation(self):
 		self.print_information('Not implemented yet')
@@ -196,12 +206,17 @@ class StrategicGUI(QMainWindow, design.Ui_MainWindow):
 		self.print_story(text_story)
 		self.print_information(text_info)
 
-	def update_map(self, trajectory=None, color_trajectory=nice_colors[5], clear=False, origin_destination=None):
+	def update_map(self, trajectory=None, color_trajectory=nice_colors[5], clear=False,\
+		origin_destination=None, overloaded_sector=None):
 		if not clear:
+			self.draw_network(display=False)
 			if trajectory!=None:
 				self.draw_trajectory(trajectory, color=color_trajectory)
 			if origin_destination!=None:
 				self.indicate_origin_destination(*origin_destination)
+			if overloaded_sector!=None:
+				self.draw_overloaded_sector(overloaded_sector)
+			self.canvas.draw()
 		else:
 			self.draw_network()
 
