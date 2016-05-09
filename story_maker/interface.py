@@ -23,6 +23,12 @@ import design
 
 from story_maker import SimulationStory
 
+"""
+Command line to generate the python template:
+pyuic4 interface_template.ui -o design.py
+
+"""
+
 def graph_bateau():
 	G = nx.Graph()
 	G.add_node(0, coord=[0., 0.])
@@ -40,8 +46,10 @@ def load_network():
 
 	return G
 
-class StrategicGUI(QMainWindow, design.Ui_MainWindow):
-	def __init__(self, parent=None, simu=None, epsilon=0.05):
+class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
+	def __init__(self, parent=None, simu=None, epsilon=0.05, normal_color_nodes=nice_colors[0],\
+		overloaded_color_nodes=nice_colors[2], orig_dest_color=nice_colors[6], traj_color=nice_colors[5],\
+		size_nodes_normal=40.):
 		super(StrategicGUI, self).__init__(parent)
 		self.setupUi(self)
 
@@ -51,6 +59,8 @@ class StrategicGUI(QMainWindow, design.Ui_MainWindow):
 		self.pause.clicked.connect(self.pause_simulation)
 		self.play.clicked.connect(self.play_simulation)
 		self.play_one_step.clicked.connect(self.play_one_step_simulation)
+		self.capacitySlider.valueChanged.connect(self.update_map)
+		self.showCapacities.stateChanged.connect(self.update_map)
 
 		#self.main_splitter.setStretchFactor(1, 10)
 		# These are pixels!
@@ -61,7 +71,67 @@ class StrategicGUI(QMainWindow, design.Ui_MainWindow):
 		self.simu.prepare_simu()
 		self.G = self.simu.G
 
+		# colors
+		self.normal_color_nodes = normal_color_nodes
+		self.overloaded_color_nodes = overloaded_color_nodes
+		self.orig_dest_color = orig_dest_color
+		self.traj_color = traj_color
+
+		# Sizes
+		self.size_nodes_normal = size_nodes_normal
+
+		self.current_map_update = {}
+
 		self.draw_network()
+
+	def show_capacities(self, shift_numbers_min=(-0.01, -0.01), shift_numbers_max=(-0.02, -0.02),\
+		fontsize_min=8, fontsize_max=13):
+		#time = event
+		time = self.capacitySlider.sliderPosition()
+
+		def size_function(load, capacity, min_size=3.*self.size_nodes_normal, max_size=12.*self.size_nodes_normal):
+			return min_size + (float(load)/capacity)*(max_size-min_size)
+
+		def fontsize_function(load, capacity, min_size=fontsize_min, max_size=fontsize_max):
+			return min_size + (float(load)/capacity)*(max_size-min_size)
+
+		def shift_function(load, capacity, min_pos=array(shift_numbers_min), max_pos=array(shift_numbers_max)):
+			return min_pos + (float(load)/capacity)*(max_pos-min_pos)
+
+		# plot only the nodes with traffic>0 for this time
+		nodes_to_plot = [n for n in self.G.nodes() if self.G.node[n]['load'][time]>0]
+
+		if len(nodes_to_plot)>0:
+			# coordinates of nodes
+			x, y = zip(*[self.G.node[n]['coord'] for n in nodes_to_plot])
+
+			# size of nodes
+			sizes = [size_function(self.G.node[n]['load'][time], self.G.node[n]['capacity']) for n in nodes_to_plot]
+
+			# colors
+			colors = []
+			for n in nodes_to_plot:
+				if self.G.node[n]['load'][time]<self.G.node[n]['capacity']:
+					colors.append(self.normal_color_nodes)
+				elif self.G.node[n]['load'][time]==self.G.node[n]['capacity']:
+					colors.append(self.overloaded_color_nodes)
+				else:
+					raise Exception("Loads should not be superior to capacity!")
+			
+			self.axes.scatter(x, y, s=sizes, edgecolor='w', c=colors, zorder=13)
+
+			# Load in points
+			for n in nodes_to_plot:
+				load, cap = self.G.node[n]['load'][time], self.G.node[n]['capacity']
+				pos_point = array(self.G.node[n]['coord'])
+				pos_text = pos_point + shift_function(load, cap)#array(shift_numbers)
+				self.axes.annotate(str(load), pos_text,
+									size=fontsize_function(load, cap), 
+									xytext=pos_text,
+									zorder=14,
+									color='w')
+		else:
+			self.print_information("All loads are null.")
 
 	def on_click(self, event):
 		if event.button!=1:
@@ -134,13 +204,11 @@ class StrategicGUI(QMainWindow, design.Ui_MainWindow):
 
 		self.canvas.draw()
 
-	def draw_network(self, display=True):
-		self.axes.clear()        
-
+	def draw_network(self):     
 		draw_sector_map(self.G, 
-						colors=nice_colors[0], 
+						colors=self.normal_color_nodes, 
 						limits=(-1.1, -1.1, 1.1, 1.), 
-						size_nodes=40, 
+						size_nodes=self.size_nodes_normal, 
 						size_edges=0.5, 
 						nodes=self.G.nodes(), 
 						zone_geo=[], 
@@ -156,13 +224,11 @@ class StrategicGUI(QMainWindow, design.Ui_MainWindow):
 						airports=True,
 						load=False,
 						numbers=True,
-						shift_numbers=(0.02, 0.005),
+						#shift_numbers=(0.02, 0.005),
+						shift_numbers=(0.03, 0.015),
 						size_numbers=8)
 
-		if display:
-			self.canvas.draw()
-
-	def draw_trajectory(self, p, color=nice_colors[5]):
+	def draw_trajectory(self, p):
 		"""
 		Parameters
 		==========
@@ -173,14 +239,15 @@ class StrategicGUI(QMainWindow, design.Ui_MainWindow):
 
 		"""
 		x, y = zip(*[self.G.node[n]['coord'] for n in p])
-		self.axes.plot(x, y, '-', lw=2, c=color)
+		self.axes.plot(x, y, '-', lw=2, c=self.traj_color)
 
-	def draw_overloaded_sector(self, sec, size=150., color=nice_colors[2]):
+	def draw_overloaded_sector(self, sec, size=150.):
 		x, y = self.G.node[sec]['coord']
-		self.axes.scatter([x], [y], marker='o', s=size, c=color, edgecolor='w', zorder=10)
+		self.axes.scatter([x], [y], marker='x', s=size, c=self.overloaded_color_nodes, edgecolor='w', zorder=10)
 
 	def indicate_origin_destination(self, origin, destination, size=400., \
-		color=nice_colors[6], marker='h', fontsize=10, shift_numbers=(-0.015, -0.015)):
+		marker='h', fontsize=10, shift_numbers=(-0.015, -0.015)):
+		color = self.orig_dest_color
 		x, y = self.G.node[origin]['coord']
 		self.axes.scatter([x], [y], marker=marker, s=size, c=color, edgecolor='w', zorder=10)
 		pos_text = array((x, y)) + array(shift_numbers)
@@ -191,9 +258,6 @@ class StrategicGUI(QMainWindow, design.Ui_MainWindow):
 		pos_text = array((x, y)) + array(shift_numbers)
 		self.axes.annotate('D', (x,y), size=fontsize, xytext=pos_text, zorder=11, color='w')
 
-		# x, y = zip(*[self.G.node[n]['coord'] for n in [origin, destination]])
-		# self.axes.plot(x, y, marker, ms=size, c=color, zorder=10)
-
 	def pause_simulation(self):
 		self.print_information('Not implemented yet')
 
@@ -202,23 +266,30 @@ class StrategicGUI(QMainWindow, design.Ui_MainWindow):
 
 	def play_one_step_simulation(self):
 		map_update_info, text_story, text_info = self.simu.step()
-		self.update_map(**map_update_info)
+		self.current_map_update = map_update_info
+		self.update_map()
 		self.print_story(text_story)
 		self.print_information(text_info)
 
-	def update_map(self, trajectory=None, color_trajectory=nice_colors[5], clear=False,\
-		origin_destination=None, overloaded_sector=None):
-		if not clear:
-			self.draw_network(display=False)
-			if trajectory!=None:
-				self.draw_trajectory(trajectory, color=color_trajectory)
-			if origin_destination!=None:
-				self.indicate_origin_destination(*origin_destination)
-			if overloaded_sector!=None:
-				self.draw_overloaded_sector(overloaded_sector)
-			self.canvas.draw()
-		else:
-			self.draw_network()
+	def update_map(self):
+		self.axes.clear()   
+		
+		trajectory = self.current_map_update.get('trajectory', None)
+		origin_destination = self.current_map_update.get('origin_destination', None)
+		overloaded_sector = self.current_map_update.get('overloaded_sector', None)
+		
+		self.draw_network()
+		
+		if trajectory!=None:
+			self.draw_trajectory(trajectory)
+		if origin_destination!=None:
+			self.indicate_origin_destination(*origin_destination)
+		if overloaded_sector!=None:
+			self.draw_overloaded_sector(overloaded_sector)
+		if self.showCapacities.checkState()==2:
+			self.show_capacities()
+		
+		self.canvas.draw()
 
 	def prepare_main_frame(self):
 		self.dpi = 100
