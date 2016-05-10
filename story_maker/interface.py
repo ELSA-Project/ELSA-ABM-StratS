@@ -3,6 +3,7 @@ import sys
 sys.path.insert(1, '..')
 sys.path.insert(1, '../abm_strategic_model1')
 
+import time
 import pickle
 from numpy import *
 from numpy.random import lognormal, normal
@@ -20,7 +21,7 @@ from matplotlib.figure import Figure
 from libs.general_tools import nice_colors
 from abm_strategic_model1.utilities import draw_sector_map, read_paras
 import design
-import additional_window_design
+#import additional_window_design
 
 from story_maker import SimulationStory
 
@@ -30,48 +31,47 @@ pyuic4 interface_template.ui -o design.py
 
 """
 
-def graph_bateau():
-	G = nx.Graph()
-	G.add_node(0, coord=[0., 0.])
-	G.add_node(1, coord=[10., 0.])
-	G.add_node(2, coord=[5., 10.*sqrt(3.)/2.])
-	G.add_edge(0, 1, weight=10.)
-	G.add_edge(1, 2, weight=10.)
-	G.add_edge(2, 0, weight=15.)
-	return G
-
-def load_network():
-	fil = '/home/earendil/Documents/ELSA/ABM/results_new/networks/DiskWorld/DiskWorld.pic'
-	with open(fil, 'r') as f:
-		G = pickle.load(f)
-
-	return G
-
 class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 	def __init__(self, parent=None, simu=None, epsilon=0.05, normal_color_nodes=nice_colors[0],\
 		overloaded_color_nodes=nice_colors[2], orig_dest_color=nice_colors[6], traj_color=nice_colors[5],\
-		size_nodes_normal=40.):
+		size_nodes_normal=40., play_velocity=1., keep_history=False, save_file='history.pic'):
 		super(StrategicGUI, self).__init__(parent)
 		self.setupUi(self)
 
 		self.prepare_main_frame()
+		self.prepare_departure_times()
+		self.prepare_satisfaction()
+
 		self.epsilon = epsilon
+		self.velocity = play_velocity
 
 		self.pause.clicked.connect(self.pause_simulation)
 		self.play.clicked.connect(self.play_simulation)
 		self.play_one_step.clicked.connect(self.play_one_step_simulation)
 		self.capacitySlider.valueChanged.connect(self.update_map)
 		self.showCapacities.stateChanged.connect(self.update_map)
-		self.departureTimes.clicked.connect(self.show_departure_times)
+		self.normalized.stateChanged.connect(self.update_departure_times)
+		self.satisfactionSlider.valueChanged.connect(self.update_satisfaction)
+		self.speedSpinBox.valueChanged.connect(self.change_velocity)
+
+		#self.departureTimes.clicked.connect(self.show_departure_times)
 
 		#self.main_splitter.setStretchFactor(1, 10)
 		# These are pixels!
-		self.main_splitter.setSizes([600, 200])
-		self.text_splitter.setSizes([400, 200])
+		self.main_splitter.setSizes([600, 300, 200])
+		#self.text_splitter.setSizes([400, 200])
 
 		self.simu = simu
 		self.simu.prepare_simu()
 		self.G = self.simu.G
+
+		self.print_information("Doing simulation with:")
+		self.print_information("- Total number of flights: " + str(len(self.simu.queue)))
+		self.print_information("- Proportion of companies S: " + str(self.simu.paras['nA']))
+		self.print_information("- Departure pattern type: " + str(self.simu.paras['departure_times']))
+		if 'Delta_t' in self.simu.paras.keys():
+			self.print_information("- Delta_t: " + str(self.simu.paras['Delta_t']))
+		self.print_information('')
 
 		# colors
 		self.normal_color_nodes = normal_color_nodes
@@ -86,8 +86,12 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 
 		self.draw_network()
 
-		# Departure times window
-		self.departure_times_window = DepartureTimes(self, simu=self.simu)
+		self.keep_history = keep_history
+		self.history = []
+		self.save_file = save_file
+
+	def change_velocity(self, event):
+		self.velocity = self.speedSpinBox.value()
 
 	def show_departure_times(self):
 		self.departure_times_window.show()
@@ -169,10 +173,12 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		return ind
 
 	def print_information(self, text):
-		self.information.append(text)
+		if text!=None:
+			self.information.append(text)
 
 	def print_story(self, text):
-		self.story.append(text)
+		if text!=None:
+			self.story.append(text)
 
 	def on_pick(self, event):
 		# The event received here is of the type
@@ -260,27 +266,62 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		marker='h', fontsize=10, shift_numbers=(-0.015, -0.015)):
 		color = self.orig_dest_color
 		x, y = self.G.node[origin]['coord']
-		self.axes.scatter([x], [y], marker=marker, s=size, c=color, edgecolor='w', zorder=10)
+		self.axes.scatter([x], [y], marker=marker, s=size, c=color, edgecolor='w', zorder=20)
 		pos_text = array((x, y)) + array(shift_numbers)
-		self.axes.annotate('O', (x,y), size=fontsize, xytext=pos_text, zorder=11, color='w')
+		self.axes.annotate('O', (x,y), size=fontsize, xytext=pos_text, zorder=21, color='w')
 
 		x, y = self.G.node[destination]['coord']
-		self.axes.scatter([x], [y], marker=marker, s=size, c=color, edgecolor='w', zorder=10)
+		self.axes.scatter([x], [y], marker=marker, s=size, c=color, edgecolor='w', zorder=20)
 		pos_text = array((x, y)) + array(shift_numbers)
-		self.axes.annotate('D', (x,y), size=fontsize, xytext=pos_text, zorder=11, color='w')
+		self.axes.annotate('D', (x,y), size=fontsize, xytext=pos_text, zorder=21, color='w')
 
 	def pause_simulation(self):
 		self.print_information('Not implemented yet')
+		self.stop = True
 
 	def play_simulation(self):
-		self.print_information('Not implemented yet')
+		#self.print_information('Not implemented yet')
+		self.stop = False
+		#self.print_information("Started playing...")
+		self.print_information("Started playing...")
+		while not self.stop:
+			self.play_one_step_simulation()
+			time.sleep(1./float(self.velocity))
+			qApp.processEvents()
+			#print "Value of self.pause.clicked: ", self.pause.clicked()
+
+			#stop = self.pause.clicked()
+
+		self.print_information("Stopped playing.")
 
 	def play_one_step_simulation(self):
-		map_update_info, text_story, text_info = self.simu.step()
-		self.current_map_update = map_update_info
-		self.update_map()
-		self.print_story(text_story)
-		self.print_information(text_info)
+		update = self.simu.step()
+
+		self.print_story(update.get('text_story', None))
+		self.print_information(update.get('text_info', None))
+
+		self.satisfaction = update.get('satisfaction', None)
+		self.current_map_update = update.get('map_update_info', None)
+
+		if not update.get('stop', False):			
+			self.update_map()
+			
+			self.update_departure_times()
+
+			self.update_satisfaction()
+
+			if self.keep_history:
+				self.history.append(update)
+		else:
+			self.stop = True
+			if self.keep_history:
+				self.dump_history()
+
+	def dump_history(self):
+		with open(self.save_file, 'w') as f:
+			pickle.dump(self.history, f)
+
+		self.print_information("History dumped as " + self.save_file) 
 
 	def update_map(self):
 		self.axes.clear()   
@@ -300,7 +341,6 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		if self.showCapacities.checkState()==2:
 			self.show_capacities()
 		
-		self.departure_times_window.show_departure_times()
 		self.canvas.draw()
 
 	def prepare_main_frame(self):
@@ -330,112 +370,98 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		#
 		self.mpl_toolbar = NavigationToolbar(self.canvas, self.main_frame)
 
-		# Other GUI controls
-		# 
-		# self.textbox = QLineEdit()
-		# self.textbox.setMinimumWidth(200)
-		# self.connect(self.textbox, SIGNAL('editingFinished ()'), self.on_draw)
+	def prepare_departure_times(self):
+		self.fig_dt = Figure((5.0, 4.0), dpi=100)
+		self.canvas_dt = FigureCanvas(self.fig_dt)
+		self.canvas_dt.setParent(self.departureTimes)
 
-		# self.draw_button = QPushButton("&Draw")
-		# self.connect(self.draw_button, SIGNAL('clicked()'), self.on_draw)
+		self.canvas_dt.setFocusPolicy(Qt.ClickFocus)
+		self.canvas_dt.setFocus()
+		self.axes_dt = self.fig_dt.add_subplot(111)
 
-		# self.grid_cb = QCheckBox("Show &Grid")
-		# self.grid_cb.setChecked(False)
-		# self.connect(self.grid_cb, SIGNAL('stateChanged(int)'), self.on_draw)
+		self.mpl_toolbar_dt = NavigationToolbar(self.canvas_dt, self.departureTimes)
 
-		# slider_label = QLabel('Bar width (%):')
-		# self.slider = QSlider(Qt.Horizontal)
-		# self.slider.setRange(1, 100)
-		# self.slider.setValue(20)
-		# self.slider.setTracking(True)
-		# self.slider.setTickPosition(QSlider.TicksBothSides)
-		# self.connect(self.slider, SIGNAL('valueChanged(int)'), self.on_draw)
+	def prepare_satisfaction(self):
+		self.fig_sat = Figure((5.0, 4.0), dpi=100)
+		self.canvas_sat = FigureCanvas(self.fig_sat)
+		self.canvas_sat.setParent(self.satisfaction)
 
-		#
-		# Layout with box sizers
-		# 
-		# hbox = QHBoxLayout()
+		self.canvas_sat.setFocusPolicy(Qt.ClickFocus)
+		self.canvas_sat.setFocus()
+		self.axes_sat = self.fig_sat.add_subplot(111)
+
+		self.mpl_toolbar_sat = NavigationToolbar(self.canvas_sat, self.departureTimes)
+
+	def update_satisfaction(self):
+		popS = (1., 0., 0.000001)#self.par_companyS
+		popR = (1., 0., 1000000.)#self.par_companyR
+
+		if self.satisfaction!=None:
+			self.axes_sat.clear()
+			sat_S = zeros(len(self.satisfaction))
+			sat_R = zeros(len(self.satisfaction))
+			nS = zeros(len(self.satisfaction))
+			nR = zeros(len(self.satisfaction))
+			for i, (sat, typ) in enumerate(self.satisfaction):
+				sat_S[i] = sat_S[i-1]
+				sat_R[i] = sat_R[i-1]
+				nS[i] = nS[i-1]
+				nR[i] = nR[i-1]
+				if typ==popS:
+					sat_S[i] += sat
+					nS[i] += 1.
+				elif typ==popR:
+					sat_R[i] += sat
+					nR[i] += 1.
+
+			sat_S = sat_S/nS
+			sat_R = sat_R/nR
+
+			typ_plot = self.satisfactionSlider.sliderPosition()
+			if typ_plot==0:
+				self.axes_sat.plot(range(len(self.satisfaction)), sat_S, label='S', color=nice_colors[0])
+				self.axes_sat.plot(range(len(self.satisfaction)), sat_R, label='R', color=nice_colors[2])
+				self.axes_sat.legend(fontsize=8, loc='lower left')
+				self.axes_sat.set_ylabel('Satisfaction')
+				self.axes_sat.set_ylim((0., 1.1))
+			elif typ_plot==1:
+				self.axes_sat.plot(range(len(self.satisfaction)), sat_S-sat_R, color=nice_colors[4])
+				self.axes_sat.set_ylabel('Sat_S - Sat_R')
+				self.axes_sat.set_ylim((-1.1, 1.1))
+			
+			self.axes_sat.set_xlabel('Number of flights')
+			
+			self.canvas_sat.draw()
 		
-		# # for w in [  self.textbox, self.draw_button, self.grid_cb,
-		# # 			slider_label, self.slider]:
-		# # 	hbox.addWidget(w)
-		# # 	hbox.setAlignment(w, Qt.AlignVCenter)
-		
-		# vbox = QVBoxLayout()
-		# vbox.addWidget(self.canvas)
-		# vbox.addWidget(self.mpl_toolbar)
-		# vbox.addLayout(hbox)
-		
-		# self.main_frame.setLayout(vbox)
-		#self.setCentralWidget(self.main_frame)
-
-class DepartureTimes(QMainWindow, additional_window_design.Ui_MainWindow):
-	def __init__(self, parent=None, simu=None):
-		super(DepartureTimes, self).__init__(parent)
-		self.setupUi(self)
-
-		self.simu = simu
-		self.prepare_main_frame()
-
-		self.normalized.stateChanged.connect(self.show_departure_times)
-
-	def prepare_main_frame(self):
-		self.dpi = 100
-		self.fig = Figure((6.0, 4.0), dpi=self.dpi)
-		self.canvas = FigureCanvas(self.fig)
-		self.canvas.setParent(self.main_frame)
-
-		self.canvas.setFocusPolicy(Qt.ClickFocus)
-		self.canvas.setFocus()
-		# to capture keyboard
-		#self.canvas.mpl_connect('key_press_event', self.pouet)
-		#self.canvas.mpl_connect('button_press_event', self.on_click)
-
-		# Since we have only one plot, we can use add_axes 
-		# instead of add_subplot, but then the subplot
-		# configuration tool in the navigation toolbar wouldn't
-		# work.
-		#
-		self.axes = self.fig.add_subplot(111)
-
-		# Bind the 'pick' event for clicking on one of the bars
-		#
-		#self.canvas.mpl_connect('pick_event', self.on_pick)
-
-		# Create the navigation toolbar, tied to the canvas
-		#
-		self.mpl_toolbar = NavigationToolbar(self.canvas, self.main_frame)
-
-	def show_departure_times(self):
-		self.axes.clear()   
+	def update_departure_times(self):
+		self.axes_dt.clear()   
 
 		normed = self.normalized.checkState()==2
 
 		pref_times = [f.pref_time/60. for f in self.simu.queue]
 		current_times = [f.fp_selected.t/60. for f in self.simu.queue if hasattr(f, 'accepted') and f.accepted]
 
-		self.axes.hist(pref_times, bins=list(range(24)), color=nice_colors[0], alpha=0.5, label='Pref. times', normed=normed)
+		self.axes_dt.hist(pref_times, bins=list(range(24)), color=nice_colors[0], alpha=0.5, label='Pref. times', normed=normed)
 		if len(current_times)>0:
-			self.axes.hist(current_times, bins=list(range(24)), color=nice_colors[2], alpha=0.5, label='Actual times', normed=normed)
-		self.axes.set_xlim((0, 24))
-		self.axes.legend()
+			self.axes_dt.hist(current_times, bins=list(range(24)), color=nice_colors[2], alpha=0.5, label='Actual times', normed=normed)
+		self.axes_dt.set_xlim((0, 24))
+		self.axes_dt.legend(fontsize=8)
 		
-		self.canvas.draw()
+		self.canvas_dt.draw()
 
-
-
-def main(paras):
+def main(paras, **kwargs):
 	simu = SimulationStory(paras, G=paras['G'])
 
 	app = QApplication(sys.argv)
-	form = StrategicGUI(simu=simu)
+	form = StrategicGUI(simu=simu, **kwargs)
 	form.show()
 
 	app.exec_()
 
 if __name__ == '__main__': 
 	#paras_file = None if len(sys.argv)==1 else sys.argv[1]
-	#paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/tests/my_paras_DiskWorld_test.py'
-	paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/abm_strategic_model1/my_paras/my_paras_DiskWorld_for_story.py'
+	paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/tests/my_paras_DiskWorld_test.py'
+	#paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/abm_strategic_model1/my_paras/my_paras_DiskWorld_for_story.py'
 	paras = read_paras(paras_file=paras_file)
-	main(paras)
+	history_save_file = '../tests/history_test.pic'
+	main(paras, keep_history=True, save_file=history_save_file)

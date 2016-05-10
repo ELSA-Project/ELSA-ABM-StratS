@@ -5,7 +5,6 @@ This simple version only displays things.
 
 """
 
-import time
 import datetime as dt
 
 from abm_strategic_model1.simulationO import Simulation
@@ -37,27 +36,31 @@ class SimulationStory(Simulation):
 
 	def next_flight(self):
 		self.current_flight_index += 1
-		self.current_flight_plan_index = 0
-		self.found = False
-		i = self.current_flight_index
+		if self.current_flight_index<len(self.queue):
+			self.current_flight_plan_index = 0
+			self.found = False
+			i = self.current_flight_index
 
-		f = self.queue[self.current_flight_index]
-		f.pos_queue = i
-		#self.allocate_flight(G, f, storymode=storymode)
+			f = self.queue[self.current_flight_index]
+			f.pos_queue = i
+			#self.allocate_flight(G, f, storymode=storymode)
 
-		#self.show_origin_destination(f.source, f.destination)
-		fake_date = dt.datetime(2010, 5, 6, 0, 0, 0)
-		ttt = dt.timedelta(minutes=f.pref_time) + fake_date
-		fmt = "%H:%M:%S"
-		strr = ttt.strftime(fmt)
+			#self.show_origin_destination(f.source, f.destination)
+			fake_date = dt.datetime(2010, 5, 6, 0, 0, 0)
+			ttt = dt.timedelta(minutes=f.pref_time) + fake_date
+			fmt = "%H:%M:%S"
+			strr = ttt.strftime(fmt)
 
-		map_update_info = {'origin_destination':(f.source, f.destination)}
-		text_story = "Flight " + str(f.pos_queue) + " from " + str(f.source) +\
-					" to " + str(f.destination) + " with parameters " +\
-					str(f.par) + " and pref. dep. time " + strr + " tries to be allocated."
-		text_info = ''
+			map_update_info = {'origin_destination':(f.source, f.destination)}
+			text_story = "Flight " + str(f.pos_queue) + " from " + str(f.source) +\
+						" to " + str(f.destination) + " with parameters " +\
+						str(f.par) + " and pref. dep. time " + strr + " tries to be allocated."
 
-		return map_update_info, text_story, text_info
+			satisfaction = self.compute_satisfaction()
+			return {'map_update_info':map_update_info, 'text_story':text_story, 'satisfaction':satisfaction}
+		else:
+			satisfaction = self.compute_satisfaction()
+			return {'text_info':"Simulation finished, no more flights.", 'stop':True, 'satisfaction':satisfaction}
 
 	def step(self):
 		flight = self.queue[self.current_flight_index]
@@ -68,12 +71,15 @@ class SimulationStory(Simulation):
 			if not self.found:
 				map_update_info = {}
 				text_story = "Flight " + str(flight.pos_queue) + " has been rejected!\n"
-				text_info = ''
 				flight.fp_selected = None
 				flight.accepted = False
-				self.found=True
+				self.found = True
 
-				return map_update_info, text_story, text_info
+				satisfaction = self.compute_satisfaction()
+
+				return {'map_update_info':map_update_info, 
+						'text_story':text_story, 
+						'satisfaction':satisfaction}
 			else:
 				return self.next_flight()
 			
@@ -81,7 +87,6 @@ class SimulationStory(Simulation):
 		i = self.current_flight_plan_index
 		flight = self.queue[self.current_flight_index]
 
-		text_info = ''
 		map_update_info = {'origin_destination':(flight.source, flight.destination)}
 		
 		fp = flight.FPs[i]
@@ -119,13 +124,9 @@ class SimulationStory(Simulation):
 			if path_overload: 
 				text_story += "sector " + str(path[j]) + " was full."
 				map_update_info['overloaded_sector'] = path[j]
-				#self.show_sector(self, path[j])
 			if source_overload:
 				text_story += "because origin airport was full."
 				map_update_info['overloaded_sector'] = path[0]
-				#print G.node[path[0]]['load_airport']
-				#print G.node[path[0]]['capacity_airport']
-				#self.show_sector(self, path[0])
 			if desetination_overload:
 				text_story += "because destination airport was full."
 				map_update_info['overloaded_sector'] = path[-1]
@@ -142,17 +143,21 @@ class SimulationStory(Simulation):
 				fp.bottleneck=path[j]
 			self.current_flight_plan_index += 1
 
-		return map_update_info, text_story, text_info
+		return {'map_update_info':map_update_info, 'text_story':text_story}
 
+	def compute_satisfaction(self):
+		satisfaction = []
+		for f in self.queue:
+			if hasattr(f, 'accepted'):
+				best_cost = f.FPs[0].cost
+				acceptedFPscost = [FP.cost for FP in f.FPs if FP.accepted]
+				if len(acceptedFPscost) != 0:
+					sat = best_cost/min(acceptedFPscost)
+				else:
+					sat = 0.
 
-	# def show_flight_plan(self, fp):
-	# 	# show in map
-	# 	self.wait(self)
+				satisfaction.append((sat, f.par))
 
-	# def show_origin_destination(self, origin, destination):
-	# 	# show on map
-	# 	self.wait(self)
-
-	# def wait(selfm how_much=1):
-	# 	time.sleep(how_much)
+		return satisfaction
+				
 

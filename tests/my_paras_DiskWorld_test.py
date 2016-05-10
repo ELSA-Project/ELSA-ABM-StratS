@@ -49,10 +49,10 @@ file_traffic = None
 if file_traffic==None:
 	# These variables are not fully independent and might be overwritten depending on
 	# the type of control you choose.
-	ACtot = 2000 						# Relevant for choosing the total number of ACss.
+	ACtot = 2 						# Relevant for choosing the total number of ACss.
 	# number of flights per hour.
-	density = 20          				# Relevant for choosing an overall density of flights
-	control_density = True				# If you want to set the density rather than the number of flights.
+	density = 1          				# Relevant for choosing an overall density of flights
+	control_density = False				# If you want to set the density rather than the number of flights.
 	
 	departure_times = 'zeros' #departing time for each flight, for each AC
 
@@ -78,7 +78,7 @@ else:
 noise = 0. 								# noise on departures in minutes.
 
 # ------------------ Behavioral parameters ---------------- #
-nA = 0.1                        			# percentage of Flights of the first population.
+nA = 0.5                        			# percentage of Flights of the first population.
 par = [[1.,0.,0.000001], [1.,0.,1000000.]]	# Parameters of the utility function for each population.
 
 # ------------------- From M0 to M1 ----------------------- #
