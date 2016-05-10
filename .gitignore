@@ -21,6 +21,7 @@ doc/*.log
 doc/*.aux
 doc/*.html
 tests/*.pyc
+tests/*.pic
 story_maker/*.pyc
 story_maker/test*.ui
 *.orig

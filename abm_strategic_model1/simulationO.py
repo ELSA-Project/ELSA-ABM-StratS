@@ -33,7 +33,7 @@ if 0:
 	seed(2)
 
 
-class Simulation:
+class Simulation(object):
 	"""
 	Class Simulation. 
 	=============
