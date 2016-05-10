@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'interface_template2.ui'
+# Form implementation generated from reading ui file 'interface_template.ui'
 #
-# Created: Mon May  9 17:49:23 2016
+# Created: Mon May  9 19:09:22 2016
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -26,7 +26,7 @@ except AttributeError:
 class Ui_StrategicLayer(object):
     def setupUi(self, StrategicLayer):
         StrategicLayer.setObjectName(_fromUtf8("StrategicLayer"))
-        StrategicLayer.resize(1528, 817)
+        StrategicLayer.resize(1528, 902)
         self.centralwidget = QtGui.QWidget(StrategicLayer)
         self.centralwidget.setObjectName(_fromUtf8("centralwidget"))
         self.horizontalLayout = QtGui.QHBoxLayout(self.centralwidget)
@@ -143,6 +143,8 @@ class Ui_StrategicLayer(object):
         self.verticalLayout_4.addLayout(self.gridLayout)
         self.horizontalLayout_2 = QtGui.QHBoxLayout()
         self.horizontalLayout_2.setObjectName(_fromUtf8("horizontalLayout_2"))
+        spacerItem2 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.horizontalLayout_2.addItem(spacerItem2)
         self.pause = QtGui.QPushButton(self.verticalLayoutWidget_2)
         self.pause.setObjectName(_fromUtf8("pause"))
         self.horizontalLayout_2.addWidget(self.pause)
@@ -152,7 +154,24 @@ class Ui_StrategicLayer(object):
         self.play_one_step = QtGui.QPushButton(self.verticalLayoutWidget_2)
         self.play_one_step.setObjectName(_fromUtf8("play_one_step"))
         self.horizontalLayout_2.addWidget(self.play_one_step)
+        spacerItem3 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.horizontalLayout_2.addItem(spacerItem3)
         self.verticalLayout_4.addLayout(self.horizontalLayout_2)
+        self.line = QtGui.QFrame(self.verticalLayoutWidget_2)
+        self.line.setFrameShape(QtGui.QFrame.HLine)
+        self.line.setFrameShadow(QtGui.QFrame.Sunken)
+        self.line.setObjectName(_fromUtf8("line"))
+        self.verticalLayout_4.addWidget(self.line)
+        self.horizontalLayout_5 = QtGui.QHBoxLayout()
+        self.horizontalLayout_5.setObjectName(_fromUtf8("horizontalLayout_5"))
+        spacerItem4 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.horizontalLayout_5.addItem(spacerItem4)
+        self.departureTimes = QtGui.QPushButton(self.verticalLayoutWidget_2)
+        self.departureTimes.setObjectName(_fromUtf8("departureTimes"))
+        self.horizontalLayout_5.addWidget(self.departureTimes)
+        spacerItem5 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.horizontalLayout_5.addItem(spacerItem5)
+        self.verticalLayout_4.addLayout(self.horizontalLayout_5)
         self.text_splitter = QtGui.QSplitter(self.main_splitter)
         self.text_splitter.setOrientation(QtCore.Qt.Vertical)
         self.text_splitter.setObjectName(_fromUtf8("text_splitter"))
@@ -203,4 +222,5 @@ class Ui_StrategicLayer(object):
         self.pause.setText(_translate("StrategicLayer", "Pause", None))
         self.play.setText(_translate("StrategicLayer", "Play", None))
         self.play_one_step.setText(_translate("StrategicLayer", "Play One step", None))
+        self.departureTimes.setText(_translate("StrategicLayer", "Departure Times", None))
 

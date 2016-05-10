@@ -6,6 +6,7 @@ This simple version only displays things.
 """
 
 import time
+import datetime as dt
 
 from abm_strategic_model1.simulationO import Simulation
 from abm_strategic_model1.simAirSpaceO import Network_Manager
@@ -45,11 +46,15 @@ class SimulationStory(Simulation):
 		#self.allocate_flight(G, f, storymode=storymode)
 
 		#self.show_origin_destination(f.source, f.destination)
+		fake_date = dt.datetime(2010, 5, 6, 0, 0, 0)
+		ttt = dt.timedelta(minutes=f.pref_time) + fake_date
+		fmt = "%H:%M:%S"
+		strr = ttt.strftime(fmt)
 
 		map_update_info = {'origin_destination':(f.source, f.destination)}
 		text_story = "Flight " + str(f.pos_queue) + " from " + str(f.source) +\
 					" to " + str(f.destination) + " with parameters " +\
-					str(f.par) + " tries to be allocated."
+					str(f.par) + " and pref. dep. time " + strr + " tries to be allocated."
 		text_info = ''
 
 		return map_update_info, text_story, text_info
@@ -101,11 +106,15 @@ class SimulationStory(Simulation):
 		desetination_overload = self.NM.overload_airport(G, path[-1],(times[-2],times[-1]))
 
 		#print "FP has been accepted:", fp.accepted
-		text_story = " - FP " + str(i) + " with departure time t0 + " +\
-					str(fp.t) + "min tried to be allocated "
+		fake_date = dt.datetime(2010, 5, 6, 0, 0, 0)
+		ttt = dt.timedelta(minutes=fp.t) + fake_date
+		fmt = "%H:%M:%S"
+		strr = ttt.strftime(fmt)
+		text_story = " - FP " + str(i) + " with departure time " +\
+					strr + " "# " tried to be allocated "
 		map_update_info['trajectory'] = fp.p
 		if not fp.accepted:
-			text_story += "but has been rejected because "
+			text_story += "has been rejected because "
 			map_update_info['color_trajectory'] = 'r'
 			if path_overload: 
 				text_story += "sector " + str(path[j]) + " was full."
@@ -122,7 +131,7 @@ class SimulationStory(Simulation):
 				map_update_info['overloaded_sector'] = path[-1]
 
 		if fp.accepted:
-			text_story += "and has been allocated.\n"
+			text_story += "has been allocated.\n"
 			map_update_info['color_trajectory'] = 'g'
 			self.NM.allocate(G, fp, first=first, last=last)
 			flight.fp_selected = fp

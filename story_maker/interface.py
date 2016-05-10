@@ -20,6 +20,7 @@ from matplotlib.figure import Figure
 from libs.general_tools import nice_colors
 from abm_strategic_model1.utilities import draw_sector_map, read_paras
 import design
+import additional_window_design
 
 from story_maker import SimulationStory
 
@@ -61,6 +62,7 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.play_one_step.clicked.connect(self.play_one_step_simulation)
 		self.capacitySlider.valueChanged.connect(self.update_map)
 		self.showCapacities.stateChanged.connect(self.update_map)
+		self.departureTimes.clicked.connect(self.show_departure_times)
 
 		#self.main_splitter.setStretchFactor(1, 10)
 		# These are pixels!
@@ -83,6 +85,13 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.current_map_update = {}
 
 		self.draw_network()
+
+		# Departure times window
+		self.departure_times_window = DepartureTimes(self, simu=self.simu)
+
+	def show_departure_times(self):
+		self.departure_times_window.show()
+		self.departure_times_window.show_departure_times()
 
 	def show_capacities(self, shift_numbers_min=(-0.01, -0.01), shift_numbers_max=(-0.02, -0.02),\
 		fontsize_min=8, fontsize_max=13):
@@ -145,7 +154,9 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 				self.print_information(text)
 
 	def get_ind_under_point(self, event):
-		'get the index of the vertex under point if within epsilon tolerance'
+		"""
+		get the index of the vertex under point if within epsilon tolerance
+		"""
 
 		xt, yt = zip(*[self.G.node[n]['coord'] for n in self.G.nodes()])#xyt[:, 0], xyt[:, 1]
 		d = sqrt((array(xt) - event.xdata)**2 + (array(yt) - event.ydata)**2)
@@ -289,6 +300,7 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		if self.showCapacities.checkState()==2:
 			self.show_capacities()
 		
+		self.departure_times_window.show_departure_times()
 		self.canvas.draw()
 
 	def prepare_main_frame(self):
@@ -357,6 +369,61 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		# self.main_frame.setLayout(vbox)
 		#self.setCentralWidget(self.main_frame)
 
+class DepartureTimes(QMainWindow, additional_window_design.Ui_MainWindow):
+	def __init__(self, parent=None, simu=None):
+		super(DepartureTimes, self).__init__(parent)
+		self.setupUi(self)
+
+		self.simu = simu
+		self.prepare_main_frame()
+
+		self.normalized.stateChanged.connect(self.show_departure_times)
+
+	def prepare_main_frame(self):
+		self.dpi = 100
+		self.fig = Figure((6.0, 4.0), dpi=self.dpi)
+		self.canvas = FigureCanvas(self.fig)
+		self.canvas.setParent(self.main_frame)
+
+		self.canvas.setFocusPolicy(Qt.ClickFocus)
+		self.canvas.setFocus()
+		# to capture keyboard
+		#self.canvas.mpl_connect('key_press_event', self.pouet)
+		#self.canvas.mpl_connect('button_press_event', self.on_click)
+
+		# Since we have only one plot, we can use add_axes 
+		# instead of add_subplot, but then the subplot
+		# configuration tool in the navigation toolbar wouldn't
+		# work.
+		#
+		self.axes = self.fig.add_subplot(111)
+
+		# Bind the 'pick' event for clicking on one of the bars
+		#
+		#self.canvas.mpl_connect('pick_event', self.on_pick)
+
+		# Create the navigation toolbar, tied to the canvas
+		#
+		self.mpl_toolbar = NavigationToolbar(self.canvas, self.main_frame)
+
+	def show_departure_times(self):
+		self.axes.clear()   
+
+		normed = self.normalized.checkState()==2
+
+		pref_times = [f.pref_time/60. for f in self.simu.queue]
+		current_times = [f.fp_selected.t/60. for f in self.simu.queue if hasattr(f, 'accepted') and f.accepted]
+
+		self.axes.hist(pref_times, bins=list(range(24)), color=nice_colors[0], alpha=0.5, label='Pref. times', normed=normed)
+		if len(current_times)>0:
+			self.axes.hist(current_times, bins=list(range(24)), color=nice_colors[2], alpha=0.5, label='Actual times', normed=normed)
+		self.axes.set_xlim((0, 24))
+		self.axes.legend()
+		
+		self.canvas.draw()
+
+
+
 def main(paras):
 	simu = SimulationStory(paras, G=paras['G'])
 
@@ -368,6 +435,7 @@ def main(paras):
 
 if __name__ == '__main__': 
 	#paras_file = None if len(sys.argv)==1 else sys.argv[1]
-	paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/tests/my_paras_DiskWorld_test.py'
+	#paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/tests/my_paras_DiskWorld_test.py'
+	paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/abm_strategic_model1/my_paras/my_paras_DiskWorld_for_story.py'
 	paras = read_paras(paras_file=paras_file)
 	main(paras)
