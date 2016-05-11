@@ -17,10 +17,31 @@ class SimulationStory(Simulation):
 	# 	map_of_net(G, colors='r', limits=(0,0,0,0), title='', size_nodes=1., size_edges=2., nodes=[], zone_geo=[], edges=True, fmt='svg', dpi=100, \
  #    save_file=None, show=True, figsize=(9,6), background_color='white', key_word_weight='weight', z_order_nodes=6, diff_edges=False, lw_map=0.8,\
  #    draw_mer_par=True)
+	def infer_control_time_window_from_queue(self, queue):		
+		"""
+		Compute the last arrival time for all flight for all flight plans.
 		
+		Notes
+		=====
+		New in 3.0.1.
+		
+		"""
+
+		max_time_arrival = 0.
+		for f in queue:
+			for fp in f.FPs:
+				# find the time of arrival
+				road = fp.t
+				for i in range(1,len(fp.p)):
+					w = self.G[fp.p[i-1]][fp.p[i]]['weight']
+					road += w       
+				max_time_arrival = max(max_time_arrival, road)
+
+		# add 2 hours to be safe.
+		return int(max_time_arrival/60. + 2.)
+
 	def prepare_simu(self):
 		self.NM = Network_Manager(old_style=self.old_style_allocation, discard_first_and_last_node=self.discard_first_and_last_node)
-		self.NM.initialize_load(self.G, length_day=int(self.day/60.))
 
 		if self.flows == {}:
 			self.build_ACs()
@@ -29,6 +50,9 @@ class SimulationStory(Simulation):
 
 		self.queue = self.NM.build_queue(self.ACs)
 		self.shuffle_departure_times()
+
+		control_time_window = self.infer_control_time_window_from_queue(self.queue)
+		self.NM.initialize_load(self.G, control_time_window)
 
 		self.current_flight_index = -1
 		self.current_flight_plan_index = 0
@@ -116,9 +140,9 @@ class SimulationStory(Simulation):
 		#print "FP has been accepted:", fp.accepted
 		fake_date = dt.datetime(2010, 5, 6, 0, 0, 0)
 		ttt = dt.timedelta(minutes=fp.t) + fake_date
-		fmt = "%H:%M:%S"
+		fmt = "%D %H:%M:%S"
 		strr = ttt.strftime(fmt)
-		text_story = " - FP " + str(i) + " with departure time " +\
+		text_story = " - FP " + str(i) + " departing " +\
 					strr + " "# " tried to be allocated "
 		map_update_info['trajectory'] = fp.p
 		if not fp.accepted:

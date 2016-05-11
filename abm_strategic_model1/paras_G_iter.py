@@ -9,7 +9,7 @@ import sys
 sys.path.insert(1,'..')
 from abm_strategic_model1.utilities import read_paras
 
-version = '3.0.0'
+version = '3.1.0'
 
 # ============================================================================ #
 # =============================== Parameters ================================= #

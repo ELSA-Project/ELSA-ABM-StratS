@@ -222,6 +222,55 @@
                 </property>
                </widget>
               </item>
+              <item>
+               <widget class="QLabel" name="label_29">
+                <property name="text">
+                 <string>24</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_30">
+                <property name="text">
+                 <string>25</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_31">
+                <property name="text">
+                 <string>26</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_32">
+                <property name="text">
+                 <string>27</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_33">
+                <property name="text">
+                 <string>28</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_34">
+                <property name="text">
+                 <string>29</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_35">
+                <property name="text">
+                 <string>30</string>
+                </property>
+               </widget>
+              </item>
              </layout>
             </item>
             <item row="1" column="0">
@@ -229,7 +278,7 @@
               <item>
                <widget class="QSlider" name="capacitySlider">
                 <property name="maximum">
-                 <number>23</number>
+                 <number>30</number>
                 </property>
                 <property name="tracking">
                  <bool>true</bool>
@@ -244,22 +293,6 @@
                  <number>1</number>
                 </property>
                </widget>
-              </item>
-              <item>
-               <spacer name="horizontalSpacer_2">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-                <property name="sizeType">
-                 <enum>QSizePolicy::Fixed</enum>
-                </property>
-                <property name="sizeHint" stdset="0">
-                 <size>
-                  <width>15</width>
-                  <height>2</height>
-                 </size>
-                </property>
-               </spacer>
               </item>
              </layout>
             </item>

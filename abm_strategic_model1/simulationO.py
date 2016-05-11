@@ -25,7 +25,7 @@ from libs.general_tools import delay, date_st, header, clock_time, draw_network_
 
 import warnings
 
-version = '3.0.0'
+version = '3.1.0'
 main_version = split(version,'.')[0] + '.' + split(version,'.')[1]
 
 if 0:
@@ -87,24 +87,27 @@ class Simulation(object):
 		
 		#os.system('mkdir -p ' + self.rep) TODO: see this!
 		
-	def make_simu(self, clean=False, storymode=False):
+	def make_simu(self, storymode=False):
 		"""
 		Do the simulation, clean afterwards the network (useful for iterations).
 
 		Parameters
 		----------
-		clean : boolean, optional
-			if True, ask the network manager to initialize load on the network 
-			beforehand.
+		# clean : boolean, optional
+		# 	if True, ask the network manager to initialize load on the network 
+		# 	beforehand.
 		storymode : boolean, optional
 			sets verbosity.
 
 		Notes
 		-----
 		Changed in 3.0.0: taken from Model 2
+		Changed in 3.1.0: now compute the control winodw time based on the
+		max arrival of flights.
 
 		(From Model 2)
 		Changed in 2.9.6: added the shuffle_departure.
+
 		
 		"""
 
@@ -116,22 +119,19 @@ class Simulation(object):
 
 		#------------------------------------------------------# 
 
-		Netman.initialize_load(self.G, length_day=int(self.day/60.))
-
 		if self.flows == {}:
 			self.build_ACs()
 		else:
 			self.build_ACs_from_flows()
-
-		# self.show_ACs()
-		# raise Exception()
 		
-		if clean:
-			Netman.initialize_load(self.G, length_day=int(self.day/60.)) # TODO: check why I am doing this again.
+		# if clean:
+		# 	Netman.initialize_load(self.G, control_time_window=control_time_window) # TODO: check why I am doing this again.
 		
 		self.queue = Netman.build_queue(self.ACs)
-
 		self.shuffle_departure_times()
+
+		control_time_window = self.infer_control_time_window_from_queue(self.queue)
+		Netman.initialize_load(self.G, control_time_window)
 
 		Netman.allocate_queue(self.G, self.queue, storymode=storymode)
 
@@ -140,6 +140,29 @@ class Simulation(object):
 		self.M0_queue = copy.deepcopy(self.queue)
 		#Netman.M0_to_M1(self.G, self.queue, self.N_shocks, self.tau, self.Nsp_nav, storymode=True)
 		Netman.M0_to_M1_quick(self.G, self.queue, self.N_shocks, self.tau, storymode=True, sectors_to_shut = self.STS)
+
+	def infer_control_time_window_from_queue(self, queue):		
+		"""
+		Compute the last arrival time for all flight for all flight plans.
+
+		Notes
+		=====
+		New in 3.1.0.
+		
+		"""
+
+		max_time_arrival = 0.
+		for f in queue:
+			for fp in f.FPs:
+				# find the time of arrival
+				road = fp.t
+				for i in range(1,len(fp.p)):
+					w = self.G[fp.p[i-1]][fp.p[i]]['weight']
+					road += w       
+				max_time_arrival = max(max_time_arrival, road)
+
+		# add 2 hours to be safe.
+		return int(max_time_arrival/60. + 2)
 
 	def build_ACs(self):
 		"""

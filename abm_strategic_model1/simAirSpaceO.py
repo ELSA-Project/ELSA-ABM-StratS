@@ -21,7 +21,10 @@ from libs.general_tools import delay, build_triangular
 from libs.YenKSP.graph import DiGraph
 from libs.YenKSP.algorithms import ksp_yen
 
-version = '3.0.0'
+version = '3.1.0'
+
+class ModelException(Exception):
+	pass
 
 class Network_Manager:
 	"""
@@ -74,7 +77,7 @@ class Network_Manager:
 			self.deallocate = self.deallocate_peaks
 			self.overload_airport = self.overload_airport_peaks
 
-	def initialize_load(self, G, length_day=24):
+	def initialize_load(self, G, control_time_window):
 		"""
 		Initialize loads for network G. If the NM is new style, it creates for each node a 
 		list of length length_day which represents loads. Load is increased by one when a 
@@ -97,8 +100,9 @@ class Network_Manager:
 		----------
 		G : Net object
 			or networkx
-		length_day : int
-			Number of hours tracked by the Network Manager.
+		control_time_window : int
+			Number of hours tracked by the Network Manager. Should be greater than the length
+			of the day because of the shifting behaviour of the companies.
 
 		Notes
 		-----
@@ -109,14 +113,17 @@ class Network_Manager:
 		Changed in 2.7: load of airports added.
 		Changed in 2.9: no more load of airports. Load is an array giving the load for each hour.
 		Changed in 2.9.3: airports again :).
+		Changed in 3.1.0: the control_time_window is now compulsory.
 
 		"""
 
+		self.control_time_window = control_time_window
+
 		if not self.old_style:
 			for n in G.nodes():
-				G.node[n]['load']=[0 for i in range(length_day)]
+				G.node[n]['load']=[0 for i in range(control_time_window)]
 			for a in G.airports:
-				G.node[a]['load_airport']=[0 for i in range(length_day)]
+				G.node[a]['load_airport']=[0 for i in range(control_time_window)]
 		else:
 			for n in G.nodes():
 				G.node[n]['load']=[[0,0],[10**6,0]] 
@@ -308,6 +315,11 @@ class Network_Manager:
 		overload : boolean,
 			True if the sector would be overloaded with the allocation of this flight plan.
 
+		Raises
+		------
+		ModelException
+			when the flight plan is partly outside of the control window.
+
 		Notes
 		-----
 		Unchanged w.r.t. Model 2.
@@ -316,21 +328,23 @@ class Network_Manager:
 		(counting those already there at the beginning and those still there at the end)
 		is greater than the capacity. 
 		Changed in 2.9.8: added the condition h<len(G.node[n]['load']). There is now an 
-		absolute reference in time and the weights of the network are in minutes.
+		absolute reference in time and the weights of the network are in minutes
+		Changed in 3.1.0: added an exception when the flight is partly outside of the 
+		control window.
 
 		"""
 
 		overload = False
-		h = 0 
+		h = 0
+		if t2/60.>=len(G.node[n]['load']):
+			raise ModelException("The arrival of a flight is after the end of the control window!\n\
+								Arrival time: " + str(t2/60.) + ' ; End of time window: ' + str(len(G.node[n]['load'])))
+
 		while float(h) <= t2/60. and h<len(G.node[n]['load']) and not overload:
-			# try:
 			if h+1 > t1/60. and G.node[n]['load'][h]+1>G.node[n]['capacity']:
 				overload = True
-			# except:
-			#     print "Problem. t1/60., t2/60., h:", t1/60., t2/60., h
-			#     print "G.node[n]['load']:", G.node[n]['load']
-			#     raise
 			h += 1
+
 		return overload
 
 	def overload_sector_peaks(self, G, n, (t1, t2)):

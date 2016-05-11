@@ -28,7 +28,7 @@ pd.options.display.mpl_style = 'default'
 #rcParams['font.family'] = 'serif'
 #rcParams['font.serif'] = ['Tahoma', 'Bitstream Vera Sans', 'Lucida Grande', 'Verdana']
 
-version = '3.0.0'
+version = '3.1.0'
 main_version = split(version,'.')[0] + '.' + split(version,'.')[1]
 loc = {'ur':1, 'ul':2, 'll':3, 'lr':4, 'r':5, 'cl':6, 'cr':7, 'lc':8, 'uc':9, 'c':10}
 

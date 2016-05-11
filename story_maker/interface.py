@@ -372,50 +372,50 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		fontsize_min=8, fontsize_max=13):
 		#time = event
 		time = self.capacitySlider.sliderPosition()
-
-		def size_function(load, capacity, min_size=3.*self.size_nodes_normal, max_size=12.*self.size_nodes_normal):
-			return min_size + (float(load)/capacity)*(max_size-min_size)
-
-		def fontsize_function(load, capacity, min_size=fontsize_min, max_size=fontsize_max):
-			return min_size + (float(load)/capacity)*(max_size-min_size)
-
-		def shift_function(load, capacity, min_pos=array(shift_numbers_min), max_pos=array(shift_numbers_max)):
-			return min_pos + (float(load)/capacity)*(max_pos-min_pos)
-
-		# plot only the nodes with traffic>0 for this time
-		nodes_to_plot = [n for n in self.G.nodes() if self.G.node[n]['load'][time]>0]
-
-		if len(nodes_to_plot)>0:
-			# coordinates of nodes
-			x, y = zip(*[self.G.node[n]['coord'] for n in nodes_to_plot])
-
-			# size of nodes
-			sizes = [size_function(self.G.node[n]['load'][time], self.G.node[n]['capacity']) for n in nodes_to_plot]
-
-			# colors
-			colors = []
-			for n in nodes_to_plot:
-				if self.G.node[n]['load'][time]<self.G.node[n]['capacity']:
-					colors.append(self.normal_color_nodes)
-				elif self.G.node[n]['load'][time]==self.G.node[n]['capacity']:
-					colors.append(self.overloaded_color_nodes)
-				else:
-					raise Exception("Loads should not be superior to capacity!")
-			
-			self.axes.scatter(x, y, s=sizes, edgecolor='w', c=colors, zorder=13)
-
-			# Load in points
-			for n in nodes_to_plot:
-				load, cap = self.G.node[n]['load'][time], self.G.node[n]['capacity']
-				pos_point = array(self.G.node[n]['coord'])
-				pos_text = pos_point + shift_function(load, cap)#array(shift_numbers)
-				self.axes.annotate(str(load), pos_text,
-									size=fontsize_function(load, cap), 
-									xytext=pos_text,
-									zorder=14,
-									color='w')
+		if time>self.simu.NM.control_time_window:
+			self.print_information("Outside of control window.")
 		else:
-			self.print_information("All loads are null.")
+			def size_function(load, capacity, min_size=3.*self.size_nodes_normal, max_size=12.*self.size_nodes_normal):
+				return min_size + (float(load)/capacity)*(max_size-min_size)
+
+			def fontsize_function(load, capacity, min_size=fontsize_min, max_size=fontsize_max):
+				return min_size + (float(load)/capacity)*(max_size-min_size)
+
+			def shift_function(load, capacity, min_pos=array(shift_numbers_min), max_pos=array(shift_numbers_max)):
+				return min_pos + (float(load)/capacity)*(max_pos-min_pos)
+
+			# plot only the nodes with traffic>0 for this time
+			nodes_to_plot = [n for n in self.G.nodes() if self.G.node[n]['load'][time]>0]
+
+			if len(nodes_to_plot)>0:
+				# coordinates of nodes
+				x, y = zip(*[self.G.node[n]['coord'] for n in nodes_to_plot])
+
+				# size of nodes
+				sizes = [size_function(self.G.node[n]['load'][time], self.G.node[n]['capacity']) for n in nodes_to_plot]
+
+				# colors
+				colors = []
+				for n in nodes_to_plot:
+					if self.G.node[n]['load'][time]<self.G.node[n]['capacity']:
+						colors.append(self.normal_color_nodes)
+					elif self.G.node[n]['load'][time]==self.G.node[n]['capacity']:
+						colors.append(self.overloaded_color_nodes)
+					else:
+						raise Exception("Loads should not be superior to capacity!")
+				
+				self.axes.scatter(x, y, s=sizes, edgecolor='w', c=colors, zorder=13)
+
+				# Load in points
+				for n in nodes_to_plot:
+					load, cap = self.G.node[n]['load'][time], self.G.node[n]['capacity']
+					pos_point = array(self.G.node[n]['coord'])
+					pos_text = pos_point + shift_function(load, cap)#array(shift_numbers)
+					self.axes.annotate(str(load), pos_text,
+										size=fontsize_function(load, cap), 
+										xytext=pos_text,
+										zorder=14,
+										color='w')
 		
 	def update_departure_times(self):
 		self.axes_dt.clear()   

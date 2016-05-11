@@ -30,7 +30,7 @@ from prepare_network import soft_infrastructure
 from libs.general_tools import yes
 from libs.paths import result_dir
 
-version = '3.0.0'
+version = '3.1.0'
 main_version = split(version,'.')[0] + '.' + split(version,'.')[1]
 
 # This is for parallel computation.
