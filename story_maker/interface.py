@@ -3,11 +3,14 @@ import sys
 sys.path.insert(1, '..')
 sys.path.insert(1, '../abm_strategic_model1')
 
+import os
+from os.path import join as jn
 import time
 import pickle
 from numpy import *
 from numpy.random import lognormal, normal
 import networkx as nx
+from random import seed
 
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
@@ -20,6 +23,8 @@ from matplotlib.figure import Figure
 from libs.general_tools import nice_colors
 from abm_strategic_model1.utilities import draw_sector_map, read_paras
 from abm_strategic_model1.simulationO import Simulation
+from libs.paths import result_dir
+
 import design
 
 from story_maker import SimulationStory
@@ -65,6 +70,18 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		super(StrategicGUI, self).__init__(parent)
 		self.setupUi(self)
 
+		if load_file==None:
+			simu = SimulationStory(paras, G=paras['G'])
+			self.print_information("Running NEW simulation with parameters:")
+		else:
+			keep_history = False
+			simu = DummySimu(load_file, paras, G=paras['G'])
+			self.print_information("REPLAYING simulation from file:" + load_file + "\nwith parameters:")
+
+		self.simu = simu
+		self.simu.prepare_simu()
+		self.G = self.simu.G
+
 		self.prepare_main_frame()
 		self.prepare_departure_times()
 		self.prepare_satisfaction()
@@ -80,6 +97,7 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.normalized.stateChanged.connect(self.update_departure_times)
 		self.satisfactionSlider.valueChanged.connect(self.update_satisfaction)
 		self.speedSpinBox.valueChanged.connect(self.change_velocity)
+		self.magicButton.clicked.connect(self.magic)
 
 		#self.departureTimes.clicked.connect(self.show_departure_times)
 
@@ -87,19 +105,6 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		# These are pixels!
 		self.main_splitter.setSizes([600, 300, 200])
 		#self.text_splitter.setSizes([400, 200])
-
-		if load_file==None:
-			simu = SimulationStory(paras, G=paras['G'])
-			self.print_information("Running NEW simulation with parameters:")
-		else:
-			keep_history = False
-			simu = DummySimu(load_file, paras, G=paras['G'])
-			self.print_information("REPLAYING simulation from file:" + load_file + "\nwith parameters:")
-
-		self.simu = simu
-		self.simu.prepare_simu()
-		self.G = self.simu.G
-
 		
 		self.print_information("- Total number of flights: " + str(len(self.simu.queue)))
 		self.print_information("- Proportion of companies S: " + str(self.simu.paras['nA']))
@@ -116,8 +121,6 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 
 		# Sizes
 		self.size_nodes_normal = size_nodes_normal
-
-		self.current_map_update = {}
 
 		self.draw_network()
 
@@ -190,6 +193,9 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 
 		return ind
 
+	def get_queue(self):
+		return self.update.get('queue', None)
+
 	def indicate_origin_destination(self, origin, destination, size=400., \
 		marker='h', fontsize=10, shift_numbers=(-0.015, -0.015)):
 		color = self.orig_dest_color
@@ -202,6 +208,10 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.axes.scatter([x], [y], marker=marker, s=size, c=color, edgecolor='w', zorder=20)
 		pos_text = array((x, y)) + array(shift_numbers)
 		self.axes.annotate('D', (x,y), size=fontsize, xytext=pos_text, zorder=21, color='w')
+
+	def magic(self):
+		current_times = [f.fp_selected.t/60. for f in self.get_queue() if hasattr(f, 'accepted') and f.accepted]
+		self.print_information(current_times)
 
 	def on_click(self, event):
 		if event.button!=1:
@@ -259,18 +269,15 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.stop = True
 
 	def play_one_step_simulation(self):
-		update = self.simu.step()
+		self.update = self.simu.step()
 
-		self.print_story(update.get('text_story', None))
-		self.print_information(update.get('text_info', None))
-
-		self.satisfaction = update.get('satisfaction', None)
-		self.current_map_update = update.get('map_update_info', None)
+		self.print_story(self.update.get('text_story', None))
+		self.print_information(self.update.get('text_info', None))
 
 		if self.keep_history:
-				self.history.append(update)
+			self.history.append(self.update)
 
-		if not update.get('stop', False):			
+		if not self.update.get('stop', False):			
 			self.update_map()
 			
 			self.update_departure_times()
@@ -341,11 +348,17 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.canvas_sat.setFocus()
 		self.axes_sat = self.fig_sat.add_subplot(111)
 
-		self.mpl_toolbar_sat = NavigationToolbar(self.canvas_sat, self.departureTimes)
+		self.mpl_toolbar_sat = NavigationToolbar(self.canvas_sat, self.satisfaction)
 
-	def print_information(self, text):
-		if text!=None:
-			self.information.append(text)
+		# Pre compute preferred times 
+		self.pref_times = [f.pref_time/60. for f in self.simu.queue]
+
+	def print_information(self, *texts):
+		if len(texts)>0 and texts[0]!=None:
+			text_tot = ''
+			for text in texts:
+				text_tot += str(text)
+			self.information.append(text_tot)
 
 	def print_story(self, text):
 		if text!=None:
@@ -406,26 +419,33 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		
 	def update_departure_times(self):
 		self.axes_dt.clear()   
+		queue = self.get_queue()
 
 		normed = self.normalized.checkState()==2
 
-		pref_times = [f.pref_time/60. for f in self.simu.queue]
-		current_times = [f.fp_selected.t/60. for f in self.simu.queue if hasattr(f, 'accepted') and f.accepted]
+		current_times = [f.fp_selected.t/60. for f in queue if hasattr(f, 'accepted') and f.accepted]
 
-		self.axes_dt.hist(pref_times, bins=list(range(24)), color=nice_colors[0], alpha=0.5, label='Pref. times', normed=normed)
+		max_hour = int(max(current_times+self.pref_times))
+		self.axes_dt.hist(self.pref_times, bins=arange(max_hour+2), color=nice_colors[0], alpha=0.5, label='Pref. times', normed=normed)
 		if len(current_times)>0:
-			self.axes_dt.hist(current_times, bins=list(range(24)), color=nice_colors[2], alpha=0.5, label='Actual times', normed=normed)
-		self.axes_dt.set_xlim((0, 24))
+			self.axes_dt.hist(current_times, bins=arange(max_hour+2), color=nice_colors[2], alpha=0.5, label='Actual times', normed=normed)
 		self.axes_dt.legend(fontsize=8)
-		
+		self.axes_dt.set_xlabel("Time of the day in hours")
+		if not normed:
+			self.axes_dt.set_ylabel("Number of departures")
+		else:
+			self.axes_dt.set_ylabel("Density of departures")
+
 		self.canvas_dt.draw()
 
 	def update_map(self):
+		current_map_update = self.update.get('map_update_info', None)
+
 		self.axes.clear()   
 		
-		trajectory = self.current_map_update.get('trajectory', None)
-		origin_destination = self.current_map_update.get('origin_destination', None)
-		overloaded_sector = self.current_map_update.get('overloaded_sector', None)
+		trajectory = current_map_update.get('trajectory', None)
+		origin_destination = current_map_update.get('origin_destination', None)
+		overloaded_sector = current_map_update.get('overloaded_sector', None)
 		
 		self.draw_network()
 		
@@ -441,16 +461,17 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.canvas.draw()
 
 	def update_satisfaction(self):
+		satisfaction = self.update.get('satisfaction', None)
 		popS = (1., 0., 0.000001)#self.par_companyS
 		popR = (1., 0., 1000000.)#self.par_companyR
 
-		if self.satisfaction!=None:
+		if satisfaction!=None:
 			self.axes_sat.clear()
-			sat_S = zeros(len(self.satisfaction))
-			sat_R = zeros(len(self.satisfaction))
-			nS = zeros(len(self.satisfaction))
-			nR = zeros(len(self.satisfaction))
-			for i, (sat, typ) in enumerate(self.satisfaction):
+			sat_S = zeros(len(satisfaction))
+			sat_R = zeros(len(satisfaction))
+			nS = zeros(len(satisfaction))
+			nR = zeros(len(satisfaction))
+			for i, (sat, typ) in enumerate(satisfaction):
 				sat_S[i] = sat_S[i-1]
 				sat_R[i] = sat_R[i-1]
 				nS[i] = nS[i-1]
@@ -467,13 +488,13 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 
 			typ_plot = self.satisfactionSlider.sliderPosition()
 			if typ_plot==0:
-				self.axes_sat.plot(range(len(self.satisfaction)), sat_S, label='S', color=nice_colors[0])
-				self.axes_sat.plot(range(len(self.satisfaction)), sat_R, label='R', color=nice_colors[2])
+				self.axes_sat.plot(range(len(satisfaction)), sat_S, label='S', color=nice_colors[0])
+				self.axes_sat.plot(range(len(satisfaction)), sat_R, label='R', color=nice_colors[2])
 				self.axes_sat.legend(fontsize=8, loc='lower left')
 				self.axes_sat.set_ylabel('Satisfaction')
 				self.axes_sat.set_ylim((0., 1.1))
 			elif typ_plot==1:
-				self.axes_sat.plot(range(len(self.satisfaction)), sat_S-sat_R, color=nice_colors[4])
+				self.axes_sat.plot(range(len(satisfaction)), sat_S-sat_R, color=nice_colors[4])
 				self.axes_sat.set_ylabel('Sat_S - Sat_R')
 				self.axes_sat.set_ylim((-1.1, 1.1))
 			
@@ -488,12 +509,24 @@ def main(paras, **kwargs):
 
 	app.exec_()
 
-if __name__ == '__main__': 
+if __name__ == '__main__':
+	if 1:
+		# Manual seed
+		see = 10
+		print "===================================="
+		print "USING SEED", see
+		print "===================================="
+		seed(see)
 	#paras_file = None if len(sys.argv)==1 else sys.argv[1]
-	paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/tests/my_paras_DiskWorld_test.py'
-	#paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/abm_strategic_model1/my_paras/my_paras_DiskWorld_for_story.py'
+	#paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/tests/my_paras_DiskWorld_test.py'
+	save_rep = jn(result_dir, 'stories')
+	os.system("mkdir -p " + save_rep)
+	paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/abm_strategic_model1/my_paras/my_paras_DiskWorld_for_story.py'
 	paras = read_paras(paras_file=paras_file)
-	history_save_file = '../tests/history_test.pic'
-	history_load_file = '../tests/history_test.pic'
-	#history_load_file = None
+	
+	history_save_file = jn(save_rep, "history_Delta_t22.pic")
+	
+	#history_load_file = '../tests/history_test.pic'
+	history_load_file = None
+	#history_load_file = jn(save_rep, "history_Delta_t22.pic")
 	main(paras, keep_history=True, save_file=history_save_file, load_file=history_load_file)

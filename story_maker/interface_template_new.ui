@@ -23,9 +23,7 @@
       <widget class="QWidget" name="verticalLayoutWidget_2">
        <layout class="QVBoxLayout" name="verticalLayout_4">
         <item>
-         <widget class="QWidget" name="main_frame" native="true">
-          <zorder>textBrowser</zorder>
-         </widget>
+         <widget class="QWidget" name="main_frame" native="true"/>
         </item>
         <item>
          <layout class="QGridLayout" name="gridLayout">
@@ -272,6 +270,13 @@
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_2">
           <item>
+           <widget class="QPushButton" name="magicButton">
+            <property name="text">
+             <string>Magic Button</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <spacer name="horizontalSpacer_3">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
@@ -342,9 +347,7 @@
          <widget class="QWidget" name="departureTimes" native="true"/>
         </item>
         <item>
-         <widget class="QWidget" name="satisfaction" native="true">
-          <zorder>label_11</zorder>
-         </widget>
+         <widget class="QWidget" name="satisfaction" native="true"/>
         </item>
         <item>
          <widget class="QCheckBox" name="normalized">
@@ -483,10 +486,6 @@
      </widget>
     </item>
    </layout>
-   <zorder>verticalLayoutWidget</zorder>
-   <zorder>textBrowser</zorder>
-   <zorder>main_splitter</zorder>
-   <zorder>verticalLayoutWidget_3</zorder>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">

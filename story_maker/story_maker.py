@@ -48,7 +48,7 @@ class SimulationStory(Simulation):
 			#self.show_origin_destination(f.source, f.destination)
 			fake_date = dt.datetime(2010, 5, 6, 0, 0, 0)
 			ttt = dt.timedelta(minutes=f.pref_time) + fake_date
-			fmt = "%H:%M:%S"
+			fmt = "%D %H:%M:%S"
 			strr = ttt.strftime(fmt)
 
 			map_update_info = {'origin_destination':(f.source, f.destination)}
@@ -66,7 +66,7 @@ class SimulationStory(Simulation):
 		flight = self.queue[self.current_flight_index]
 
 		if self.current_flight_plan_index<len(flight.FPs) and not self.found:
-			return self.next_flight_plan(self.G)
+			d = self.next_flight_plan(self.G)
 		else:
 			if not self.found:
 				map_update_info = {}
@@ -77,12 +77,15 @@ class SimulationStory(Simulation):
 
 				satisfaction = self.compute_satisfaction()
 
-				return {'map_update_info':map_update_info, 
+				d = {'map_update_info':map_update_info, 
 						'text_story':text_story, 
 						'satisfaction':satisfaction}
 			else:
-				return self.next_flight()
-			
+				d = self.next_flight()
+		
+		d['queue'] = self.queue 
+		return d
+
 	def next_flight_plan(self, G):
 		i = self.current_flight_plan_index
 		flight = self.queue[self.current_flight_index]

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'interface_template_new.ui'
 #
-# Created: Tue May 10 17:26:11 2016
+# Created: Wed May 11 13:23:26 2016
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -143,6 +143,9 @@ class Ui_StrategicLayer(object):
         self.verticalLayout_4.addLayout(self.gridLayout)
         self.horizontalLayout_2 = QtGui.QHBoxLayout()
         self.horizontalLayout_2.setObjectName(_fromUtf8("horizontalLayout_2"))
+        self.magicButton = QtGui.QPushButton(self.verticalLayoutWidget_2)
+        self.magicButton.setObjectName(_fromUtf8("magicButton"))
+        self.horizontalLayout_2.addWidget(self.magicButton)
         spacerItem2 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout_2.addItem(spacerItem2)
         self.label_28 = QtGui.QLabel(self.verticalLayoutWidget_2)
@@ -278,6 +281,7 @@ class Ui_StrategicLayer(object):
         self.label_14.setText(_translate("StrategicLayer", "21", None))
         self.label_13.setText(_translate("StrategicLayer", "22", None))
         self.label_12.setText(_translate("StrategicLayer", "23", None))
+        self.magicButton.setText(_translate("StrategicLayer", "Magic Button", None))
         self.label_28.setText(_translate("StrategicLayer", "Step per second", None))
         self.pause.setText(_translate("StrategicLayer", "Pause", None))
         self.play.setText(_translate("StrategicLayer", "Play", None))
