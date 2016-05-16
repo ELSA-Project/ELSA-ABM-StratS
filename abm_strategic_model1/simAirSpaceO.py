@@ -16,12 +16,13 @@ from numpy import sqrt, exp, log
 from numpy.random import lognormal
 import matplotlib.delaunay as triang
 import pickle
+from itertools import takewhile
 
-from libs.general_tools import delay, build_triangular
+from libs.general_tools import delay, build_triangular, clock_time
 from libs.YenKSP.graph import DiGraph
 from libs.YenKSP.algorithms import ksp_yen
 
-version = '3.1.0'
+version = '3.1.1'
 
 class ModelException(Exception):
 	pass
@@ -847,6 +848,7 @@ class Flight:
 		New in 2.9.6: comes from AirCompany object.
 		Changed in 2.9.7: ai and aj are source and destination.
 		Changed in 2.9.9: resolved a serious bug of references on paths.
+		Changed in 3.1.1: slightly optimized.
 		
 		"""
 
@@ -865,16 +867,19 @@ class Flight:
 		# For each shortest path, compute the path in sectors and the total weight of the nav-path
 		SP = [(p, G.weight_path(p)) for p in G.short[(ai,aj)]]
 
-		# Compute the cost of the worst path (with desired time).
+		# # Compute the cost of the worst path (with desired time).
 		uworst = utility(self.par, SP[0][-1], t0sp, SP[-1][-1], t0sp)
-				
+
 		# Compute the cost of all paths which have a cost smaller than uworst 
-		u = [[(p, t0sp + i*tau, utility(self.par, SP[0][-1], t0sp, c, t0sp + i*tau)) for p ,c in SP] for i in range(self.Nfp)\
-			if utility(self.par,SP[0][-1], t0sp, SP[0][-1],t0sp + i*tau)<=uworst]
+		# Old one (slightly less efficient)
+		# u = [[(p, t0sp + i*tau, utility(self.par, SP[0][-1], t0sp, c, t0sp + i*tau)) for p, c in SP] for i in range(self.Nfp)\
+		# 	if utility(self.par,SP[0][-1], t0sp, SP[0][-1],t0sp + i*tau)<=uworst]
+
+		u = [list(takewhile(lambda (x, y, cost): cost<=uworst, ((p, t0sp+i*tau, utility(self.par, SP[0][-1], t0sp, c, t0sp+i*tau)) for i in range(self.Nfp)))) for p, c in SP]
 
 		# Select the Nfp flight plans less costly, ordered by increasing cost.
 		fp = [FlightPlan(a[0][:], a[1], a[2], self.id) for a in sorted([item for sublist in u for item in sublist], key=lambda a: a[2])[:self.Nfp]]
-
+				
 		if len(fp)!=self.Nfp:
 			raise Exception('Problem: there are', len(fp), 'flights plans whereas there should be', self.Nfp)
 	
@@ -1706,37 +1711,34 @@ class Net(nx.Graph):
 		return sum([self[p[i]][p[i+1]]['weight'] for i in range(len(p)-1)])
 		
 
-def utility(par,Lsp,t0sp,L,t0):
-
-	(alpha,betha1,betha2)=par
+def utility((alpha,betha1,betha2), Lsp, t0sp, L, t0):
+	"""
+	the inputs of this function are all supposed to be NumPy arrays
+	   
+	Call: U=UTILITY(ALPHA,BETHA1,BETHA2,LSP,T0SP,L,T0);
+	the function utility.m computes the utility function value, comparing two
+	paths on a graph;
 	
-	#"""
-	#the imputs of this function are all supposed to be NumPy arrays
-	#    
-	#Call: U=UTILITY(ALPHA,BETHA1,BETHA2,LSP,T0SP,L,T0);
-	#the function utility.m computes the utility function value, comparing two
-	#paths on a graph;
-	#
-	#INPUTS
-	#
-	#alpha, betha1, betha2 -> empirically assigned weight parameters,
-	#ranging from 0 to 1;
-	#
-	#Lsp -> length of the shortest path;
-	#
-	#t0sp -> departure time of the motion along the shortest path;
-	#
-	#L -> length of the path which one wants to compare to the shortest
-	#one;
-	#
-	#t0 -> depature time of the motion on the path used in the
-	#coparison with the shortes one;
-	#
-	#OUTPUT
-	#
-	#U -> is the value of the utility function for the given choise of paths;
-	#
-	#"""
+	INPUTS
+	
+	alpha, betha1, betha2 -> empirically assigned weight parameters,
+	ranging from 0 to 1;
+	
+	Lsp -> length of the shortest path;
+	
+	t0sp -> departure time of the motion along the shortest path;
+	
+	L -> length of the path which one wants to compare to the shortest
+	one;
+	
+	t0 -> depature time of the motion on the path used in the
+	coparison with the shortes one;
+	
+	OUTPUT
+	
+	U -> is the value of the utility function for the given choise of paths;
+	
+	"""
 	
 	return np.dot(alpha,L)+np.dot(betha1,np.absolute(t0+L-(t0sp+Lsp)))+np.dot(betha2,np.absolute(t0-t0sp))
 	

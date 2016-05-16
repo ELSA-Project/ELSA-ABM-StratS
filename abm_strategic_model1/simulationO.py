@@ -20,12 +20,11 @@ from utilities import draw_network_map, read_paras
 
 from libs.paths import result_dir
 from libs.general_tools import delay, date_st, header, clock_time, draw_network_and_patches
-
 #from tools_airports import map_of_net
 
 import warnings
 
-version = '3.1.0'
+version = '3.1.1'
 main_version = split(version,'.')[0] + '.' + split(version,'.')[1]
 
 if 0:
@@ -104,6 +103,7 @@ class Simulation(object):
 		Changed in 3.0.0: taken from Model 2
 		Changed in 3.1.0: now compute the control winodw time based on the
 		max arrival of flights.
+		Changed in 3.1.1: slightly optimized.
 
 		(From Model 2)
 		Changed in 2.9.6: added the shuffle_departure.
@@ -119,6 +119,7 @@ class Simulation(object):
 
 		#------------------------------------------------------# 
 
+		# This is the most time-consuming piece!
 		if self.flows == {}:
 			self.build_ACs()
 		else:
@@ -137,9 +138,10 @@ class Simulation(object):
 
 		self.mark_best_of_queue()
 
-		self.M0_queue = copy.deepcopy(self.queue)
-		#Netman.M0_to_M1(self.G, self.queue, self.N_shocks, self.tau, self.Nsp_nav, storymode=True)
-		Netman.M0_to_M1_quick(self.G, self.queue, self.N_shocks, self.tau, storymode=True, sectors_to_shut = self.STS)
+		if self.N_shocks!=0:
+			self.M0_queue = copy.deepcopy(self.queue)
+			#Netman.M0_to_M1(self.G, self.queue, self.N_shocks, self.tau, self.Nsp_nav, storymode=True)
+			Netman.M0_to_M1_quick(self.G, self.queue, self.N_shocks, self.tau, storymode=True, sectors_to_shut = self.STS)
 
 	def infer_control_time_window_from_queue(self, queue):		
 		"""
@@ -198,7 +200,7 @@ class Simulation(object):
 		Changed in 2.9: pairs given to ACs are navpoints, not sectors.
 
 		"""
-		
+
 		if type(self.AC)==int:
 			self.AC = [self.AC/len(self.pars) for i in range(len(self.pars))]
 		
@@ -213,6 +215,7 @@ class Simulation(object):
 		for i,par in enumerate(self.pars):
 			for j in range(self.AC[i]):
 				self.ACs[k] = AirCompany(k, self.Nfp, self.na, self.G.connections(), par)
+				# Filling FPs is what takes most of the time
 				self.ACs[k].fill_FPs(self.t0sp[k], self.tau, self.G)
 				k+=1
 
@@ -448,7 +451,6 @@ class Simulation(object):
 			print 'AC', ac.id
 			ac.show_flights()
 
-
 def build_path(paras, vers=main_version, in_title=['Nfp', 'tau', 'par', 'ACtot', 'nA', 'departure_times',\
 	'old_style_allocation', 'noise'], rep=result_dir, name_G=None):
 	"""
@@ -483,7 +485,7 @@ def build_path(paras, vers=main_version, in_title=['Nfp', 'tau', 'par', 'ACtot',
 	if name_G==None:
 		name_G = paras['G'].name
 
-	name = 'model1/' + name_G + '/Sim_v' + vers + '_' + paras['G'].name
+	name = 'model1/' + vers + '/' + name_G + '/single_simulations/Sim_v' + vers + '_' + paras['G'].name
 	name = jn(rep, name)
 	
 	in_title = list(np.unique(in_title))
@@ -703,7 +705,7 @@ def do_standard((paras, G), storymode=False):
 	sim = Simulation(paras, G=G.copy(), verbose=False)
 	sim.make_simu(storymode=storymode)
 	sim.queue = post_process_queue(sim.queue)
-	
+
 	results_queue = extract_aggregate_values_on_queue(sim.queue, paras['par'])
 	results_G = extract_aggregate_values_on_network(sim.G)
 	
@@ -714,7 +716,6 @@ def do_standard((paras, G), storymode=False):
 		results[met] = {tuple(p):[] for p in paras['par']}
 		for p in paras['par']:
 			results[met][tuple(p)] = results_queue[met][tuple(p)]
-
 	del sim
 	return results
 
