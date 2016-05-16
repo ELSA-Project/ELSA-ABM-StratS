@@ -46,9 +46,10 @@ class DummySimu(Simulation):
 		self.load_file = load_file
 
 	def load_history(self):
+		print 'Loading history...'
 		with open(self.load_file, 'r') as f:
 			self.updates, self.queue = pickle.load(f)
-		self.idx = -1
+		self.current_flight_index = -1
 
 	def prepare_simu(self):
 		"""
@@ -58,27 +59,33 @@ class DummySimu(Simulation):
 		self.load_history()
 
 	def step(self):
-		self.idx += 1
-		return self.updates[self.idx]
+		self.current_flight_index += 1
+		return self.updates[self.current_flight_index]
 
 class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 	def __init__(self, parent=None, simu=None, epsilon=0.05, normal_color_nodes=nice_colors[0],\
 		overloaded_color_nodes=nice_colors[2], orig_dest_color=nice_colors[6], traj_color=nice_colors[5],\
 		size_nodes_normal=40., play_velocity=1., keep_history=False, save_file='history.pic',\
-		load_file=None):
+		load_file=None, rep_res='.'):
 
 		super(StrategicGUI, self).__init__(parent)
 		self.setupUi(self)
 
+		self.epsilon = epsilon
+		self.velocity = play_velocity
+
 		if load_file==None:
 			simu = SimulationStory(paras, G=paras['G'])
-			self.print_information("Running NEW simulation with parameters:")
+			self.print_information("Preparing NEW simulation with parameters:")
 		else:
 			keep_history = False
-			simu = DummySimu(load_file, paras, G=paras['G'])
+			simu = DummySimu(jn(rep_res, load_file), paras, G=paras['G'])
 			self.print_information("REPLAYING simulation from file:" + load_file + "\nwith parameters:")
 
+		self.rep_res = rep_res
+
 		self.simu = simu
+
 		self.simu.prepare_simu()
 		self.G = self.simu.G
 
@@ -86,8 +93,6 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.prepare_departure_times()
 		self.prepare_satisfaction()
 
-		self.epsilon = epsilon
-		self.velocity = play_velocity
 
 		self.pause.clicked.connect(self.pause_simulation)
 		self.play.clicked.connect(self.play_simulation)
@@ -98,14 +103,11 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.satisfactionSlider.valueChanged.connect(self.update_satisfaction)
 		self.speedSpinBox.valueChanged.connect(self.change_velocity)
 		self.magicButton.clicked.connect(self.magic)
+		self.saveGraphs.clicked.connect(self.save_figures)
 
-		#self.departureTimes.clicked.connect(self.show_departure_times)
-
-		#self.main_splitter.setStretchFactor(1, 10)
 		# These are pixels!
 		self.main_splitter.setSizes([600, 300, 200])
-		#self.text_splitter.setSizes([400, 200])
-		
+
 		self.print_information("- Total number of flights: " + str(len(self.simu.queue)))
 		self.print_information("- Proportion of companies S: " + str(self.simu.paras['nA']))
 		self.print_information("- Departure pattern type: " + str(self.simu.paras['departure_times']))
@@ -173,7 +175,7 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.axes.scatter([x], [y], marker='x', s=size, c=self.overloaded_color_nodes, edgecolor='w', zorder=10)
 
 	def dump_history(self):
-		with open(self.save_file, 'w') as f:
+		with open(jn(self.rep_res, self.save_file), 'w') as f:
 			pickle.dump((self.history, self.simu.queue), f)
 
 		self.print_information("History dumped as " + self.save_file)
@@ -236,35 +238,6 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 
 		QMessageBox.information(self, "Click!", msg)
 
-	def on_draw_test(self):
-		""" Redraws the figure
-		"""
-		#str = unicode(self.textbox.text())
-		#self.data = map(int, str.split())
-
-		#x = range(len(self.data))
-
-		# clear the axes and redraw the plot anew
-		#
-		self.axes.clear()        
-		#self.axes.grid(self.grid_cb.isChecked())
-
-		n = 1000
-		mu = 1.
-		sig = 1.
-		values = normal(mu, sig, size=n)
-
-		self.axes.hist(values, bins=50
-			#left=x, 
-			#height=self.data, 
-			#width=self.slider.value() / 100.0, 
-			#align='center', 
-			#alpha=0.44,
-			#picker=5
-			)
-
-		self.canvas.draw()
-
 	def pause_simulation(self):
 		self.stop = True
 
@@ -293,8 +266,12 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.stop = False
 		self.print_information("Started playing...")
 		while not self.stop:
+			start_time = time.time()
 			self.play_one_step_simulation()
-			time.sleep(1./float(self.velocity))
+			
+			sim_duration = time.time()-start_time
+
+			time.sleep(max(0., 1./float(self.velocity) - sim_duration))
 
 			# Catch all the other events
 			qApp.processEvents()
@@ -363,6 +340,18 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 	def print_story(self, text):
 		if text!=None:
 			self.story.append(text)
+	
+	def save_figures(self):
+		self.print_information("Saving graphs and history in " + self.rep_res)
+		it = self.simu.current_flight_index
+		self.satisfactionSlider.setSliderPosition(0)
+		self.fig_sat.savefig(jn(self.rep_res, 'satisfactions_Nf' + str(it) +  '.png'))
+		self.satisfactionSlider.setSliderPosition(1)
+		self.fig_sat.savefig(jn(self.rep_res, 'diff_sats_Nf' + str(it) +  '.png'))
+		self.fig_dt.savefig(jn(self.rep_res, 'departure_times_Nf' + str(it) +  '.png'))
+
+		if self.keep_history:
+			self.dump_history()
 
 	def show_departure_times(self):
 		self.departure_times_window.show()
@@ -502,6 +491,7 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 			
 			self.canvas_sat.draw()
 
+
 def main(paras, **kwargs):
 	app = QApplication(sys.argv)
 	form = StrategicGUI(**kwargs)
@@ -524,9 +514,9 @@ if __name__ == '__main__':
 	paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/abm_strategic_model1/my_paras/my_paras_DiskWorld_for_story.py'
 	paras = read_paras(paras_file=paras_file)
 	
-	history_save_file = jn(save_rep, "history_Delta_t22.pic")
+	history_save_file = "history_Delta_t22.pic"
 	
 	#history_load_file = '../tests/history_test.pic'
-	history_load_file = None
-	#history_load_file = jn(save_rep, "history_Delta_t22.pic")
-	main(paras, keep_history=True, save_file=history_save_file, load_file=history_load_file)
+	#history_load_file = None
+	history_load_file = jn(save_rep, "history_big.pic")
+	main(paras, keep_history=True, save_file=history_save_file, load_file=history_load_file, rep_res=save_rep)

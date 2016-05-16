@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'interface_template_new.ui'
 #
-# Created: Wed May 11 14:02:17 2016
+# Created: Mon May 16 17:20:08 2016
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -185,6 +185,9 @@ class Ui_StrategicLayer(object):
         self.horizontalLayout_2.addWidget(self.play_one_step)
         spacerItem2 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout_2.addItem(spacerItem2)
+        self.saveGraphs = QtGui.QPushButton(self.verticalLayoutWidget_2)
+        self.saveGraphs.setObjectName(_fromUtf8("saveGraphs"))
+        self.horizontalLayout_2.addWidget(self.saveGraphs)
         self.verticalLayout_4.addLayout(self.horizontalLayout_2)
         self.verticalLayoutWidget_3 = QtGui.QWidget(self.main_splitter)
         self.verticalLayoutWidget_3.setObjectName(_fromUtf8("verticalLayoutWidget_3"))
@@ -312,6 +315,7 @@ class Ui_StrategicLayer(object):
         self.pause.setText(_translate("StrategicLayer", "Pause", None))
         self.play.setText(_translate("StrategicLayer", "Play", None))
         self.play_one_step.setText(_translate("StrategicLayer", "Play One step", None))
+        self.saveGraphs.setText(_translate("StrategicLayer", "Save Graphs and History", None))
         self.normalized.setText(_translate("StrategicLayer", "Normalized Departure Times", None))
         self.label_27.setText(_translate("StrategicLayer", "Satisfaction", None))
         self.label_26.setText(_translate("StrategicLayer", "Absolute", None))
