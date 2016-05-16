@@ -12,17 +12,21 @@ from random import seed
 import pickle
 import numpy as np
 
-from simulationO import do_standard
+from simulationO import do_standard, build_path as build_path_single
 from utilities import read_paras, post_process_paras
 from prepare_network import soft_infrastructure
-from libs.general_tools import counter
+from abm_strategic_model1.iter_simO import average, loop
+from libs.general_tools import counter, clock_time
 from libs.paths import result_dir
 
 #pd.options.display.mpl_style = 'default'
 
+version = '3.1.0'
+main_version = version.split('.')[0] + '.' + version.split('.')[1]
+
 class EvolutionCourse(object):
 	def __init__(self, paras, evolution_type='constant_number', fitness_var='satisfaction',\
-		n_iter=50, def_pop1=(1., 0., 0.000001), def_pop2=(1., 0., 1000000.)):
+		n_iter=50, def_pop1=(1., 0., 0.000001), def_pop2=(1., 0., 1000000.), n_eq=None):
 		"""
 		Parameters
 		----------
@@ -47,6 +51,11 @@ class EvolutionCourse(object):
 		self.pop1 = def_pop1
 		self.pop2 = def_pop2
 
+		if n_eq==None:
+			self.n_eq = int(n_iter/2.)
+		else:
+			self.n_eq = n_eq
+
 	def fight(self, paras):
 		"""
 		Run simulation based on the current state of the paras dict.
@@ -61,9 +70,8 @@ class EvolutionCourse(object):
 		Based on the results, compute te fitness and change the paras.
 		"""
 
-		fitness_diff = self.fitness(results)
-
 		if self.evolution_type=='constant_number':
+			fitness_diff = self.fitness(results)
 			#paras['nA'] = min(1., max(0., paras['nA']*(1.+fitness_diff)))
 			#new_value = max(self.nA_min, min(self.nA_max, fitness_diff))
 			new_value = fitness_diff
@@ -72,6 +80,11 @@ class EvolutionCourse(object):
 			s2 = results[self.fitness_var][self.pop2]
 			nA = paras['nA']
 			new_value = (nA*(1.+s1))/(nA*(1.+s1) + (1.-nA)*(1.+s2))
+		elif self.evolution_type=='replicator':
+			s1 = results[self.fitness_var][self.pop1]
+			s2 = results[self.fitness_var][self.pop2]
+			nA = paras['nA']
+			new_value = nA + nA*(1.-nA)*(s1-s2)
 		else:
 			raise Exception('Unknown evolution_type:', self.evolution_type)
 
@@ -80,6 +93,12 @@ class EvolutionCourse(object):
 		paras = post_process_paras(paras)
 
 		return paras
+
+	def compute_results(self):
+		eq = np.mean(self.record['nA'][-self.n_eq:])
+		std = np.std(self.record['nA'][-self.n_eq:])
+
+		self.results = {'eq':eq, 'std':std}
 
 	def compute_bounds_on_mix(self, eps=0.0001):
 		ntot = self.paras['ACtot']
@@ -95,12 +114,12 @@ class EvolutionCourse(object):
 		fitness_diff = (results[self.fitness_var][self.pop1] - results[self.fitness_var][self.pop2])/2.
 		return (1.+fitness_diff)/2.
 
-	def run(self):
+	def run(self, verbose=True):
 		paras = self.paras
 		for i in range(self.n_iter):
-			counter(i, self.n_iter, message='Evolving...')
+			if verbose:
+				counter(i, self.n_iter, message='Evolving...')
 			# print 'i=', i
-			
 			results = self.fight(paras)
 			# print 'sat S=', results[self.fitness_var][self.pop1]
 			# print 'sat R=', results[self.fitness_var][self.pop2]
@@ -108,11 +127,40 @@ class EvolutionCourse(object):
 			paras = self.evolve(paras, results)
 			# print 'New nA=', paras['nA']
 			self.append_to_record(paras, results)
-			# print
 
 	def append_to_record(self, paras, results):
 		self.record['nA'].append(paras['nA'])
 		self.record['fitness'].append(self.fitness(results))
+
+def build_pat(paras, vers=main_version, in_title=['tau', 'par', 'ACtot', 'nA'], rep=result_dir):
+	"""
+	Build the path for results.
+	"""
+	return build_path_single(paras, vers=vers, rep=rep) + '_iter' + str(paras['n_iter']) + '_evolution.pic'
+
+def do_evo((paras, kwargs)):
+	EC = EvolutionCourse(paras, **kwargs)
+	EC.run(verbose=False)
+	EC.compute_results()
+	return EC.results
+
+def aggregate_results(results_list):
+	results = {}
+	for met in results_list[0].keys():
+		results[met] = {'avg':np.mean([v[met] for v in results_list]), 'std':np.std([v[met] for v in results_list])}
+	
+	return results	
+
+def iter_evolution(paras, **kwargs):
+	n_iter_tot = np.prod([len(paras[p + '_iter']) for p in paras['paras_to_loop']])
+	paras['n_iter_tot'] = n_iter_tot
+	print "Total number of iterations over the parameters:", n_iter_tot
+
+	loop({p:paras[p + '_iter'] for p in paras['paras_to_loop']}, paras['paras_to_loop'], \
+		paras, tot_lvl=len(paras['paras_to_loop']), thing_to_do=average,\
+		args_do=(paras, kwargs), do=do_evo, build_pat=build_pat, args_pat=(paras, ),\
+		aggregator=aggregate_results, parallel=paras['parallel'], force=paras['force'], \
+		n_iter=paras['n_iter'])
 
 
 if __name__=='__main__':
@@ -137,6 +185,8 @@ if __name__=='__main__':
 
 	soft_infrastructure(paras['G'], paras_G)
 
+	paras['nA']=0.5
+
 	print
 	paras['G'].describe(level=2)
 	print
@@ -152,7 +202,7 @@ if __name__=='__main__':
 
 	print 'ACs:', paras['AC']
 
-	EC = EvolutionCourse(paras, n_iter=100, evolution_type='proportional')
+	EC = EvolutionCourse(paras, n_iter=200, evolution_type='replicator')
 	EC.run()
 
 	#print EC.record
@@ -160,7 +210,7 @@ if __name__=='__main__':
 	# simple plot
 	plt.plot(range(EC.n_iter), EC.record['nA'], '-b')
 
-	eq = np.mean(EC.record['nA'][15:])
+	eq = np.mean(EC.record['nA'][-100:])
 	plt.plot(range(EC.n_iter), [eq]*EC.n_iter, '--r')
 	#plt.plot(range(EC.n_iter), EC.record['fitness'], '-b')
 	plt.show()

@@ -185,8 +185,6 @@ def contour_global_met_vs_par(results, paras, met='satisfaction', name='', rep='
 	if norm_pairs_of_airports:
 		len_pairs={G.name:len(G.pairs) for G in paras['G_iter']}
 		overlaps={G.name:overlap_network(G) for G in paras['G_iter']}
-	
-
 
 	matrix = []
 	y = []

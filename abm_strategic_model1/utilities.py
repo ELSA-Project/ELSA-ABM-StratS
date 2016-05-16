@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import pickle
 import imp
 
-from general_tools import split_coords, map_of_net, nice_colors
+from libs.general_tools import split_coords, map_of_net, nice_colors
 
 version='3.0.0'
 

@@ -30,7 +30,7 @@ from prepare_network import soft_infrastructure
 from libs.general_tools import yes
 from libs.paths import result_dir
 
-version = '3.1.0'
+version = '3.1.1'
 main_version = split(version,'.')[0] + '.' + split(version,'.')[1]
 
 # This is for parallel computation.
@@ -98,7 +98,64 @@ def build_path_average(paras, vers=main_version, in_title=['tau', 'par', 'ACtot'
     
     return build_path_single(paras, vers=vers, rep=rep, name_G=Gname) + '_iter' + str(paras['n_iter']) + '.pic'
 
-def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path_average, rep=result_dir):
+def aggregate_results(results_list):
+    results = {}
+    for met in results_list[0].keys():
+        if type(results_list[0][met])==type(np.float64(1.0)):
+            results[met] = {'avg':np.mean([v[met] for v in results_list]), 'std':np.std([v[met] for v in results_list])}
+        elif type(results_list[0][met])==type({}):
+            results[met] = {tuple(p):[] for p in results_list[0][met].keys()}
+            for company in results_list[0][met].keys():
+                results[met][company] = {'avg':np.mean([v[met][company] for v in results_list]), 'std':np.std([v[met][company] for v in results_list])}
+    return results
+
+def average(args_do=None, save=1, do=None, build_pat=None, args_pat=None,\
+    kwargs_pat={}, rep=None, aggregator=None, verbose=True, force=False, parallel=False,\
+    n_iter=2):
+    """
+    More general function than next one.
+    """
+    #rep = build_pat(paras, Gname=G.name, rep=rep)
+    rep = build_pat(*args_pat, **kwargs_pat)
+    if force or not os.path.exists(rep):  
+        inputs = [args_do for i in range(n_iter)]
+        start_time = time()
+        if parallel:
+            if verbose:
+                print 'Doing', len(inputs), 'iterations in parallel...',
+            results_list = parmap(do, inputs)
+        else:
+            if verbose:
+                print 'Doing', len(inputs), 'iterations sequentially...',
+            results_list = []
+            for i, a in enumerate(inputs):
+                #sys.stdout.write('\r' + 'Doing simulations...' + str(int(100*(i+1)/float(paras['n_iter']))) + '%')
+                #sys.stdout.flush() 
+                results_list.append(do(a))
+            
+        if verbose:
+            print ' done in', time()-start_time, 's'
+            print
+        
+        results = aggregator(results_list)
+                    
+        if save>0:
+            os.system('mkdir -p ' + os.path.dirname(rep))
+            with open(rep, 'w') as f:
+                pickle.dump(results, f)
+    else:
+        if verbose:
+            print 'Skipped this value because the file already exists and parameter force is deactivated.'
+
+def average_sim2(paras=None, G=None, save=1, do=do_standard, build_pat=build_path_average, rep=result_dir,\
+    aggregator=aggregate_results, verbose=True):
+
+    average(args_do=(paras, G), save=save, do=do, build_pat=build_pat, args_pat=(paras),\
+    kwargs_pat={'Gname':G.name, 'rep':rep}, rep=rep, aggregator=aggregator, verbose=verbose,\
+    force=paras['force'], parallel=paras['parallel'], n_iter=paras['n_iter'])
+
+def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path_average, rep=result_dir,\
+    aggregator=aggregate_results, verbose=True):
     """
     Average some simulations which have the same 
     
@@ -119,37 +176,33 @@ def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path
         inputs = [(paras, G) for i in range(paras['n_iter'])]
         start_time = time()
         if paras['parallel']:
-            print 'Doing', len(inputs), 'iterations in parallel...',
+            if verbose:
+                print 'Doing', len(inputs), 'iterations in parallel...',
             results_list = parmap(do, inputs)
         else:
-            print 'Doing', len(inputs), 'iterations sequentially...',
+            if verbose:
+                print 'Doing', len(inputs), 'iterations sequentially...',
             results_list = []
             for i, a in enumerate(inputs):
                 #sys.stdout.write('\r' + 'Doing simulations...' + str(int(100*(i+1)/float(paras['n_iter']))) + '%')
                 #sys.stdout.flush() 
                 results_list.append(do(a))
             
-            
-        print ' done in', time()-start_time, 's'
-        print
+        if verbose:
+            print ' done in', time()-start_time, 's'
+            print
         
-        results={}
-        for met in results_list[0].keys():
-            if type(results_list[0][met])==type(np.float64(1.0)):
-                results[met]={'avg':np.mean([v[met] for v in results_list]), 'std':np.std([v[met] for v in results_list])}
-            elif type(results_list[0][met])==type({}):
-                results[met]={tuple(p):[] for p in results_list[0][met].keys()}
-                for company in results_list[0][met].keys():
-                    results[met][company]={'avg':np.mean([v[met][company] for v in results_list]), 'std':np.std([v[met][company] for v in results_list])}
+        results = aggregator(results_list)
                     
         if save>0:
             os.system('mkdir -p ' + os.path.dirname(rep))
             with open(rep, 'w') as f:
                 pickle.dump(results, f)
     else:
-        print 'Skipped this value because the file already exists and parameter force is deactivated.'
+        if verbose:
+            print 'Skipped this value because the file already exists and parameter force is deactivated.'
 
-def loop(a, level, parass, gather=False, thing_to_do=None, tot_lvl=0, **args):
+def loop(a, level, parass, gather=False, thing_to_do=None, tot_lvl=0, show_detailed_evo=False, it=0, **args):
     """
     Generic recursive function to make several levels of iterations.
    
@@ -174,17 +227,24 @@ def loop(a, level, parass, gather=False, thing_to_do=None, tot_lvl=0, **args):
 
     all_stuff = []
     if level==[]:
-        return thing_to_do(**args)
+        if not show_detailed_evo:
+            #sys.stdout.write('\r' + 'Doing simulations...' + str(int(100*(it+1)/float(args['paras']['n_iter_tot']))) + '%')
+            sys.stdout.write('\r' + 'Doing simulations...' + str(int(100*(it+1)/float(parass['n_iter_tot']))) + '%')
+            sys.stdout.flush() 
+            it += 1
+        return it, thing_to_do(verbose=show_detailed_evo, **args)
     else:
         assert level[0] in a.keys()
         for i in a[level[0]]:
             n_dashes = max(0, tot_lvl - len(level)+1)
-            print n_dashes*'-', level[0], '=', i
+            if show_detailed_evo:
+                print n_dashes*'-', level[0], '=', i
             parass.update(level[0],i)
-            stuff = loop(a, level[1:], parass, thing_to_do=thing_to_do, tot_lvl=tot_lvl, **args)
+            it, stuff = loop(a, level[1:], parass, thing_to_do=thing_to_do, tot_lvl=tot_lvl, it=it,\
+                                             show_detailed_evo=show_detailed_evo, **args)
             if gather:
                 all_stuff.append(stuff)
-        return all_stuff
+        return it, all_stuff
     
 def iter_sim(paras, save=1, do=do_standard, build_pat=build_path_average, rep=result_dir):#, make_plots=True):#la variabile test_airports è stata inserita al solo scopo di testare le rejections
     """
@@ -209,6 +269,11 @@ def iter_sim(paras, save=1, do=do_standard, build_pat=build_path_average, rep=re
     #         setstate(pickle.load(f))
     
     print header(paras)
+
+    # Compute number of iterations
+    n_iter_tot = np.prod([len(paras[p + '_iter']) for p in paras['paras_to_loop']])
+    paras['n_iter_tot'] = n_iter_tot
+    print "Total number of iterations over the parameters:", n_iter_tot
     
     if paras['fixnetwork']:
         G = paras['G']        
@@ -216,7 +281,8 @@ def iter_sim(paras, save=1, do=do_standard, build_pat=build_path_average, rep=re
         G = None
         
     loop({p:paras[p + '_iter'] for p in paras['paras_to_loop']}, paras['paras_to_loop'], \
-        paras, tot_lvl=len(paras['paras_to_loop']), thing_to_do=average_sim, paras=paras, G=G, do=do, build_pat=build_pat, save=save, rep=rep)
+        paras, tot_lvl=len(paras['paras_to_loop']), thing_to_do=average_sim, paras=paras, \
+        G=G, do=do, build_pat=build_pat, save=save, rep=rep)
 
 def change_airports((G, paras_G), change_name_G=True):
     """
@@ -251,15 +317,15 @@ def iter_airport_change(paras, G, do=change_airports):
     """        
     G.name_generic = G.name
 
-    files = loop({p:paras[p + '_iter'] for p in paras['paras_to_loop']}, paras['paras_to_loop'], \
-        paras, gather=True, thing_to_do=produce_several_airports, paras=paras, do=do, G=G)
+    it, files = loop({p:paras[p + '_iter'] for p in paras['paras_to_loop']}, paras['paras_to_loop'], \
+        paras, gather=True, thing_to_do=produce_several_airports, paras=paras, do=do, G=G, show_detailed_evo=True)
 
     with open(jn(G.rep, 'list_of_files.pic'), 'w') as f:
         pickle.dump(list(np.array(files).flatten()), f)
 
     print "Lisf of files of network saved as", jn(G.rep, 'list_of_files.pic')
 
-def produce_several_airports(paras, do=change_airports, G=None):
+def produce_several_airports(paras, do=change_airports, G=None, verbose=True):
     """
     Used to produce several versions of a network (draw the airports at random at each iteration).
     paras is fixed here.
