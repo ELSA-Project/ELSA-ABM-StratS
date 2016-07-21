@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 
 import pickle
-from ABMvars import paras, give_airports_to_network, NoAirportsLeft
+#from ABMvars import paras, give_airports_to_network, NoAirportsLeft
 from performance_plots import get_results
 import numpy as np
 import matplotlib.pyplot as plt

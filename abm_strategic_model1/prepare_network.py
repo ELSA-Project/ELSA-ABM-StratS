@@ -6,6 +6,10 @@
 This file is used to build a sector network for model 1.
 
 TODO: Write a builder?
+
+Can be used as:
+./prepate_network.py [1] [2] 
+by default, [1] is 'paras_G.py' and [2] is join(result_dir, 'networks')
 ===========================================================================
 """
 
@@ -20,6 +24,7 @@ from ast import literal_eval
 from scipy.spatial import Voronoi, voronoi_plot_2d
 from shapely.geometry import Polygon, Point, LineString
 from random import seed
+import matplotlib.pyplot as plt
 
 from simAirSpaceO import Net
 from utilities import read_paras
@@ -28,7 +33,7 @@ from libs.paths import result_dir
 from libs.general_tools import draw_network_and_patches, voronoi_finite_polygons_2d
 
 
-version='3.0.0'
+version='3.1.0'
 
 def area(p):
     """
@@ -371,6 +376,45 @@ def extract_weights_from_traffic(G, flights):
         print 'Warning! Some edges do not have a weight!'
     return weights
 
+def extract_airports_from_traffic(G, flights):
+    """
+    This is a function you can pass to the builder (prepare_network) in 
+    order to infer the airports and pairs from traffic. 
+    You can build your own custom function (for instance to restrict to some pairs).
+    By default, this one extract every possible entry/exit from flights, finding the first node
+    (forward and backward) which are in the list of nodes of the network.
+
+    Notes
+    =====
+    New in 3.1.0
+
+    """
+
+    assert G.type=='sec'
+    entry_exit = []
+    for f in flights[:]:
+        # Find the first node in trajectory which is in the list of nodes of G.
+        idx_entry = 0
+        while idx_entry<len(f['route_m1t']) and not G.idx_nodes[f['route_m1t'][idx_entry][0]] in G.nodes():
+            idx_entry += 1
+        if idx_entry==len(f['route_m1t']): 
+            flights.remove(f)
+            continue
+        
+        # Find the first node in trajectory which is in the list of nodes of G (backwards).
+        idx_exit = -1
+        while abs(idx_exit)<len(f['route_m1t']) and not G.idx_nodes[f['route_m1t'][idx_exit][0]] in G.nodes():
+            idx_exit -= 1
+        if idx_exit==len(f['route_m1t']):
+            flights.remove(f)
+            continue
+
+        entry_exit.append((G.idx_nodes[f['route_m1t'][idx_entry][0]], G.idx_nodes[f['route_m1t'][idx_exit][0]]))
+
+    airports = list(set([e for ee in entry_exit for e in ee]))
+
+    return airports, entry_exit
+
 def give_capacities_and_weights(G, paras_G):
     """
     Gives the capacities and weights (time of travel between nodes)
@@ -631,23 +675,32 @@ def soft_infrastructure(G, paras_G):
     # `Airports' means all entry and exit points here, not only physical airports.
     print "Choosing the airports..."
 
-    paras_G['pairs_sec'], paras_G['airports_sec'] = reduce_airports_to_existing_nodes(G, paras_G['pairs_sec'], paras_G['airports_sec'])
-
-    if paras_G['airports_sec']!=None:
-        G.add_airports(paras_G['airports_sec'], paras_G['min_dis'], pairs=paras_G['pairs_sec'], C_airport=paras_G['C_airport'])
+    if paras_G['generate_airports_from_traffic']:
+        airports, entry_exit = extract_airports_from_traffic(G, paras_G['flights_selected'])
     else:
-        # If none of them are specified, draw at random some entry/exits for the navpoint network and
-        # infer the sector airports.
-        G.generate_airports(paras_G['nairports_sec'], paras_G['min_dis'], C_airport=100000)
+        paras_G['pairs_sec'], paras_G['airports_sec'] = reduce_airports_to_existing_nodes(G, paras_G['pairs_sec'], paras_G['airports_sec'])
+        if paras_G['airports_sec']!=None:
+            G.add_airports(paras_G['airports_sec'], paras_G['min_dis'], pairs=paras_G['pairs_sec'], C_airport=paras_G['C_airport'])
+        else:
+            # If none of them are specified, draw at random some entry/exits for the navpoint network and
+            # infer the sector airports.
+            G.generate_airports(paras_G['nairports_sec'], paras_G['min_dis'], C_airport=100000)
 
     print 'Number of airports (sectors) at this point:', len(G.airports)
-    print 'Number of connections (sectors) at this point:', len(G.connections())
     print 'Airports at this point:', G.airports
     
+    ############ Choose available connections ##############
+    if paras_G['generate_connections_from_traffic']:
+        print 'Getting connections from traffic...'
+        G.set_connections(entry_exit)
+    else:
+        print 'Choosing connection network of type', paras_G['connections'], '...'
+        G.generate_connections(typ=paras_G['connections'], options=paras_G['connections_options'])
+    print 'Number of connections (sectors) at this point:', len(G.connections())
+
     ########## Generate Capacities and weights ###########
     print "Choosing capacities and weights..."
     G = give_capacities_and_weights(G, paras_G)
-    print
     
     ############# Computing shortest paths ###########
     G.Nfp = paras_G['Nfp']
@@ -732,6 +785,7 @@ def prepare_network(paras_G, rep=None, save_name=None, show=True):
 
     # Save 
     if rep!=None:
+        print 'Network saved as', join(rep, save_name), '.pic'
         with open(join(rep, save_name) + '.pic','w') as f:
             pickle.dump(G, f)
         if paras_G['flights_selected']!=None:
@@ -751,6 +805,16 @@ def prepare_network(paras_G, rep=None, save_name=None, show=True):
                                      trajectories=[sp for paths in G.short.values() for sp in paths], 
                                      rep=rep,
                                      trajectories_type='sectors')
+
+        # Distribution of degree of airport network.
+        AG = nx.DiGraph()
+        AG.add_edges_from(G.connections())
+
+        degree_sequence = nx.degree(AG).values()
+
+        plt.hist(degree_sequence,cumulative=-1)
+        plt.xlabel("Degree")
+        plt.show()
         #else:
         #    trajectories = [[G.G_nav.idx_nodes[p[0]] for p in f['route_m1']] for f in paras_G['flights_selected']]
         #    draw_network_and_patches(G, G.G_nav, G.polygons, name=save_name, show=True, flip_axes=True, trajectories=trajectories, rep=rep)

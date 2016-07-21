@@ -7,6 +7,9 @@ This is the main interface to the model. The main functions are
 parameters, 
  - iter_sim, which makes iterations of average_sim over several values of 
  parameters. 
+
+ How to use:
+ ./iter_simO.py paras_iter.py
 ===========================================================================
 """
 
@@ -113,11 +116,11 @@ def average(args_do=None, save=1, do=None, build_pat=None, args_pat=None,\
     kwargs_pat={}, rep=None, aggregator=None, verbose=True, force=False, parallel=False,\
     n_iter=2):
     """
-    More general function than next one.
+    More general function than average_sim.
     """
     #rep = build_pat(paras, Gname=G.name, rep=rep)
     rep = build_pat(*args_pat, **kwargs_pat)
-    if force or not os.path.exists(rep):  
+    if force or not os.path.exists(rep):
         inputs = [args_do for i in range(n_iter)]
         start_time = time()
         if parallel:
@@ -202,7 +205,7 @@ def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path
         if verbose:
             print 'Skipped this value because the file already exists and parameter force is deactivated.'
 
-def loop(a, level, parass, gather=False, thing_to_do=None, tot_lvl=0, show_detailed_evo=False, it=0, **args):
+def loop(a, level, parass, results={}, thing_to_do=None, tot_lvl=0, show_detailed_evo=False, it=0, **args):
     """
     Generic recursive function to make several levels of iterations.
    
@@ -213,15 +216,23 @@ def loop(a, level, parass, gather=False, thing_to_do=None, tot_lvl=0, show_detai
     level: list,
         of parameters on which to loop. The first one is the most outer loop, the last
         one is the most inner loop.
-    gather: boolean, optional
-        if true, gather the results of all the individula loops.
+    results: dict,
+        recursive dictionnary with all results.
+    thing_to_do: function,
+        function to call with args *args at the bottom of the recursion.
     tot_lvl: int, optional
         Informational only. Should be the total number of levels. Passed unchanged.
+    show_detailed_evo:boolean,
+        if True, prints the value of parameters for each loop. Otherwise, prints
+        aggregated information
+    it: int,
+        used to count the total number of loopts (unfolded).
     
     Notes
     -----
     New in 2.6: Makes an arbitrary number of loops
     Changed in 3.0.0: added gather option
+    Changed in 3.1.1: added automatic gathering of results with a dictionnary
 
     """
 
@@ -229,7 +240,7 @@ def loop(a, level, parass, gather=False, thing_to_do=None, tot_lvl=0, show_detai
     if level==[]:
         if not show_detailed_evo:
             #sys.stdout.write('\r' + 'Doing simulations...' + str(int(100*(it+1)/float(args['paras']['n_iter_tot']))) + '%')
-            sys.stdout.write('\r' + 'Doing simulations...' + str(int(100*(it+1)/float(parass['n_iter_tot']))) + '%')
+            sys.stdout.write('\r' + 'Doing simulations...' + str(int(100*(it+1)/float(parass.get('n_iter_tot', 1.)))) + '%')
             sys.stdout.flush() 
             it += 1
         return it, thing_to_do(verbose=show_detailed_evo, **args)
@@ -240,11 +251,9 @@ def loop(a, level, parass, gather=False, thing_to_do=None, tot_lvl=0, show_detai
             if show_detailed_evo:
                 print n_dashes*'-', level[0], '=', i
             parass.update(level[0],i)
-            it, stuff = loop(a, level[1:], parass, thing_to_do=thing_to_do, tot_lvl=tot_lvl, it=it,\
+            it, results[i] = loop(a, level[1:], parass, results={}, thing_to_do=thing_to_do, tot_lvl=tot_lvl, it=it,\
                                              show_detailed_evo=show_detailed_evo, **args)
-            if gather:
-                all_stuff.append(stuff)
-        return it, all_stuff
+        return it, results
     
 def iter_sim(paras, save=1, do=do_standard, build_pat=build_path_average, rep=result_dir):#, make_plots=True):#la variabile test_airports è stata inserita al solo scopo di testare le rejections
     """
@@ -318,10 +327,10 @@ def iter_airport_change(paras, G, do=change_airports):
     G.name_generic = G.name
 
     it, files = loop({p:paras[p + '_iter'] for p in paras['paras_to_loop']}, paras['paras_to_loop'], \
-        paras, gather=True, thing_to_do=produce_several_airports, paras=paras, do=do, G=G, show_detailed_evo=True)
+        paras, thing_to_do=produce_several_airports, paras=paras, do=do, G=G, show_detailed_evo=True)
 
     with open(jn(G.rep, 'list_of_files.pic'), 'w') as f:
-        pickle.dump(list(np.array(files).flatten()), f)
+        pickle.dump(list(np.array(files.values()).flatten()), f)
 
     print "Lisf of files of network saved as", jn(G.rep, 'list_of_files.pic')
 

@@ -49,19 +49,19 @@ file_traffic = None
 if file_traffic==None:
 	# These variables are not fully independent and might be overwritten depending on
 	# the type of control you choose.
-	ACtot = 2 						# Relevant for choosing the total number of ACss.
+	ACtot = 200 						# Relevant for choosing the total number of ACss.
 	# number of flights per hour.
 	density = 1          				# Relevant for choosing an overall density of flights
 	control_density = False				# If you want to set the density rather than the number of flights.
 	
-	departure_times = 'zeros' #departing time for each flight, for each AC
+	departure_times = 'square_waves' #departing time for each flight, for each AC
 
 	#One can also specifiy a file only for times of departures.
 	file_times = None
 	if file_times==None:
 		if departure_times=='square_waves':
 			width_peak = 60. 			# Duration of a wave
-			Delta_t = 60.*0.      		# Time between the end of a wave and the beginning of the next one.
+			Delta_t = 60.*4.      		# Time between the end of a wave and the beginning of the next one.
 			ACsperwave = 20				# Relevant for choosing a number of ACs per wave rather than a total number
 			control_ACsperwave = False	# True if you want to control ACsperwave instead of density/ACtot
 

@@ -12,12 +12,12 @@ from math import sqrt, cos, sin, pi, ceil
 import numpy as np
 from numpy import *
 import matplotlib.gridspec as gridspec
-#from descartes import PolygonPatch
+from descartes import PolygonPatch
 import matplotlib.pyplot as plt
 import pickle
 import imp
 
-from libs.general_tools import split_coords, map_of_net, nice_colors
+from libs.general_tools import split_coords, map_of_net, nice_colors, _colors
 
 version='3.0.0'
 
@@ -107,16 +107,20 @@ def draw_network_map(G, title='Network map', queue=[], rep='./',airports=True, l
 
 def draw_network_map_bis(G, title='Network map', trajectories=[], rep='./',
     airports=True, load=True, generated=False, add_to_title='', polygons=[], 
-    numbers=False, show=True, colors='b'):
+    numbers=False, show=True, colors='b', convert_to_degrees=True, draw_edges=True):
     print "Drawing network..."
-    x_min=min([G.node[n]['coord'][0]/60. for n in G.nodes()])-0.5
-    x_max=max([G.node[n]['coord'][0]/60. for n in G.nodes()])+0.5
-    y_min=min([G.node[n]['coord'][1]/60. for n in G.nodes()])-0.5
-    y_max=max([G.node[n]['coord'][1]/60. for n in G.nodes()])+0.5
+    if convert_to_degrees:
+        conversion = 60.
+    else:
+        conversion = 1.
+    x_min = min([G.node[n]['coord'][0]/conversion for n in G.nodes()])-0.5
+    x_max = max([G.node[n]['coord'][0]/conversion for n in G.nodes()])+0.5
+    y_min = min([G.node[n]['coord'][1]/conversion for n in G.nodes()])-0.5
+    y_max = max([G.node[n]['coord'][1]/conversion for n in G.nodes()])+0.5
     
-
+    #print x_min,y_min,x_max,y_max
     #(x_min,y_min,x_max,y_max),G,airports,max_wei,zone_geo = rest
-    fig=plt.figure(figsize=(9,6))#*(y_max-y_min)/(x_max-x_min)))#,dpi=600)
+    fig = plt.figure(figsize=(9,6))#*(y_max-y_min)/(x_max-x_min)))#,dpi=600)
     gs = gridspec.GridSpec(1, 2,width_ratios=[6.,1.])
     ax = plt.subplot(gs[0])
     ax.set_aspect(1./0.8)
@@ -126,11 +130,12 @@ def draw_network_map_bis(G, title='Network map', trajectories=[], rep='./',
             return a,b
         y,x=[G.node[n]['coord'][0] for n in G.nodes()], [G.node[n]['coord'][1] for n in G.nodes()]
     else:
-        m=draw_zonemap(x_min,y_min,x_max,y_max,'i')
-        x,y=split_coords(G,G.nodes(),r=0.08)
+        m = draw_zonemap(x_min,y_min,x_max,y_max,'i')
+        x,y = split_coords(G,G.nodes(),r=0.08)
     
     for i,pol in enumerate(polygons):
-        patch = PolygonPatch(pol,alpha=0.5, zorder=2, color=_colors[i%len(_colors)])
+        print pol
+        patch = PolygonPatch(pol, alpha=0.5, zorder=2)#, color=_colors[i%len(_colors)])
         ax.add_patch(patch) 
 
     if load:
@@ -140,35 +145,37 @@ def draw_network_map_bis(G, title='Network map', trajectories=[], rep='./',
     else:
         sze=10
         
-    coords={n:m(y[i],x[i]) for i,n in enumerate(G.nodes())}
+    coords = {n:m(y[i],x[i]) for i,n in enumerate(G.nodes())}
+
+    print coords
     
     ax.set_title(title)
-    sca=ax.scatter([coords[n][0] for n in G.nodes()],[coords[n][1] for n in G.nodes()],marker='o',zorder=6,s=sze,c=colors)#,s=snf,lw=0,c=[0.,0.45,0.,1])
+    sca = ax.scatter([coords[n][0] for n in G.nodes()],[coords[n][1] for n in G.nodes()],marker='o',zorder=6,s=sze,c=colors)#,s=snf,lw=0,c=[0.,0.45,0.,1])
     if airports:
         scairports=ax.scatter([coords[n][0] for n in G.airports],[coords[n][1] for n in G.airports],marker='o',zorder=6,s=20,c='r')#,s=snf,lw=0,c=[0.,0.45,0.,1])
 
-    if 1:
+    if draw_edges:
         for e in G.edges():
             plt.plot([coords[e[0]][0],coords[e[1]][0]],[coords[e[0]][1],coords[e[1]][1]],'k-',lw=0.5)#,lw=width(G[e[0]][e[1]]['weight'],max_wei),zorder=4)
           
-    #weights={n:{v:0. for v in G.neighbors(n)} for n in G.nodes()}
-    weights={n:{} for n in G.nodes()}
-    for path in trajectories:
-        try:
-            #path=f.FPs[[fpp.accepted for fpp in f.FPs].index(True)].p
-            for i in range(0,len(path)-1):
-                #print path[i], path[i+1]
-                #weights[path[i]][path[i+1]]+=1.
-                weights[path[i]][path[i+1]] = weights[path[i]].get(path[i+1], 0.) + 1.
-        except ValueError: # Why?
-            pass
-    
-    max_w=np.max([w for vois in weights.values() for w in vois.values()])
+        #weights={n:{v:0. for v in G.neighbors(n)} for n in G.nodes()}
+        weights={n:{} for n in G.nodes()}
+        for path in trajectories:
+            try:
+                #path=f.FPs[[fpp.accepted for fpp in f.FPs].index(True)].p
+                for i in range(0,len(path)-1):
+                    #print path[i], path[i+1]
+                    #weights[path[i]][path[i+1]]+=1.
+                    weights[path[i]][path[i+1]] = weights[path[i]].get(path[i+1], 0.) + 1.
+            except ValueError: # Why?
+                pass
+        
+        max_w = np.max([w for vois in weights.values() for w in vois.values()])
      
-    for n,vois in weights.items():
-        for v,w in vois.items():
-           # if G.node[n]['m1'] and G.node[v]['m1']:
-                plt.plot([coords[n][0],coords[v][0]],[coords[n][1],coords[v][1]],'r-',lw=w/max_w*4.)#,lw=width(G[e[0]][e[1]]['weight'],max_wei),zorder=4)
+        for n,vois in weights.items():
+            for v,w in vois.items():
+               # if G.node[n]['m1'] and G.node[v]['m1']:
+                    plt.plot([coords[n][0],coords[v][0]],[coords[n][1],coords[v][1]],'r-',lw=w/max_w*4.)#,lw=width(G[e[0]][e[1]]['weight'],max_wei),zorder=4)
 
     if numbers:
         for n in G.nodes():
@@ -231,7 +238,7 @@ def draw_zonemap(x_min,y_min,x_max,y_max,res):
     m.drawcountries(color='#6D5F47', linewidth=0.8)
     m.drawmeridians(np.arange(-180, 180, 5), color='#bbbbbb')
     m.drawparallels(np.arange(-90, 90, 5), color='#bbbbbb')
-    return 
+    return m
 
 def extract_data_from_files(paras_G):
     """
@@ -256,16 +263,17 @@ def extract_data_from_files(paras_G):
                 paras_G['nairports_sec'] = len(paras_G['airports_sec'])
 
         else:
-            paras_G[item]=None
+            if not item in paras_G.keys():
+                paras_G[item]=None
 
-    # Check consistency of pairs and airports.
-
-    for p1, p2 in paras_G['pairs_sec']:
-        try:
-            assert p1 in paras_G['airports_sec'] and p2 in paras_G['airports_sec']
-        except:
-            print "You asked a connection for which one of the airport does not exist:", (p1, p2)
-            raise
+    # Check consistency of pairs and airports (if not from traffic)
+    if not paras_G['generate_airports_from_traffic']:
+        for p1, p2 in paras_G['pairs_sec']:
+            try:
+                assert p1 in paras_G['airports_sec'] and p2 in paras_G['airports_sec']
+            except:
+                print "You asked a connection for which one of the airport does not exist:", (p1, p2)
+                raise
 
     return paras_G
 
@@ -371,6 +379,7 @@ def read_paras(paras_file=None, post_process=True):
         import my_paras as paras_mod
     else:
         paras_mod = imp.load_source("paras", paras_file)
+
     paras = paras_mod.paras
 
     if post_process:

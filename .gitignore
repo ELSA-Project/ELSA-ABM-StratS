@@ -25,3 +25,4 @@ tests/*.pic
 story_maker/*.pyc
 story_maker/test*.ui
 *.orig
+*sync-conflict*

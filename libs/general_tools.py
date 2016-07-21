@@ -1238,6 +1238,49 @@ def restrict_to(dg, fixed_values={}):
     slct = msk.all(axis=1)
     return dg.ix[slct]
 
+#########################################################################################
+
+"""
+These three functions allow to convert a nested dictionary into a multi-indexed dataframe.
+Typical usage:
+df = recursive_concat(results)
+"""
+def make_df_with_3_levels(user_dict):
+    frames = []
+    user_ids = []
+    for user_id, d in user_dict.iteritems():
+        user_ids.append(user_id)
+        frames.append(pd.DataFrame.from_dict(d, orient='index'))
+
+    return pd.concat(frames, keys=user_ids)
+
+def dict_depth(d, depth=0):
+    if not isinstance(d, dict) or not d:
+        return depth
+    return max(dict_depth(v, depth+1) for k, v in d.iteritems())
+
+def recursive_concat(dic):
+    if dict_depth(dic)==3:
+        return make_df_with_3_levels(dic)
+    else:
+        frames = []
+        user_ids = []
+        for user_id, dic2 in dic.items():
+            user_ids.append(user_id)
+            frames.append(recursive_concat(dic2))
+        
+        return pd.concat(frames, keys=user_ids)
+
+#########################################################################################
+
+def r_squared(y, y_fit):
+    y = np.array(y)
+    y_fit = np.array(y_fit)
+    y_bar = y.mean()
+    SS_tot = sum((y-y_bar)**2)
+    SS_res = sum((y-y_fit)**2)
+    return 1. - SS_res/SS_tot
+
 if __name__=='__main__':
     G = build_triangular(5)
     

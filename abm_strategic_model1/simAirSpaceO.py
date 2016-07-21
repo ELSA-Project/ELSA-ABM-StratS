@@ -22,7 +22,7 @@ from libs.general_tools import delay, build_triangular, clock_time
 from libs.YenKSP.graph import DiGraph
 from libs.YenKSP.algorithms import ksp_yen
 
-version = '3.1.1'
+version = '3.2.0'
 
 class ModelException(Exception):
 	pass
@@ -1428,6 +1428,36 @@ class Net(nx.Graph):
 
 		self.add_airports(*args, **kwargs)
 
+	def generate_connections(self, typ=None, options={}):
+		"""
+		Generate available pairs of airports.
+
+		Parameters
+		==========
+		typ: string, optional
+			Type of airpor network. Leave None for complete graph, 'BA'
+			for Barabasi-Albert network.
+		options: dict, optional
+			Dictionary of options for the generation. If typ=='BA', this 
+			dictionary should have the key 'mean_k' at least
+
+		Notes
+		-----
+		New in 3.2.0
+
+		"""
+
+		if typ==None:
+			self.short = {(ai,aj):[] for ai in self.airports for aj in self.airports if len(nx.shortest_path(self, ai, aj))-2>=min_dis}
+		elif typ=='BA':
+			# Compute a Barabasi-Albert graph
+			AG = nx.barabasi_albert_graph(len(self.airports), int(options['mean_k']/2.))
+			# Translate the links ids in names of airports
+			links = [(self.airports[i], self.airports[j]) for i, j in AG.edges()]
+			# Because AG is undirected
+			links2 = [(self.airports[j], self.airports[i]) for i, j in AG.edges()]
+			self.short = {(ai,aj):[] for ai, aj in links+links2}
+
 	def generate_airports(self, nairports, min_dis, C_airport=10):
 		"""
 		Generate nairports airports. Build the accessible pairs of airports for this network
@@ -1436,11 +1466,11 @@ class Net(nx.Graph):
 		Notes
 		-----
 		Changed in 3.0.0: updated with stuff from Model 2
+		Changed in 3.2.0: removed short generation
 		
 		"""
 
 		self.airports = sample(self.nodes(),nairports)
-		self.short = {(ai,aj):[] for ai in self.airports for aj in self.airports if len(nx.shortest_path(self, ai, aj))-2>=min_dis}
 		
 		for a in self.airports:
 			self.node[a]['capacity']=100000                 # TODO: check this.
@@ -1686,6 +1716,9 @@ class Net(nx.Graph):
 
 		return spath_new
 
+	def set_connections(self, connections):
+		self.short = {(ai,aj):[] for ai, aj in connections}
+		
 	def shut_sector(self,n):
 		for v in nx.neighbors(self,n):
 			self[n][v]['weight']=10**6

@@ -65,14 +65,13 @@ if paras_G['file_capacities'] == None and not paras_G['generate_capacities_from_
 # a navpoint which is entry/exit must be an airport. Generally, it is preferred to set navpoints entry/exits
 # this section as it is.
 
-# WARNING: you should not change these parameters.
 paras_G['file_airports_sec'] = None
-if paras_G['file_airports_sec'] == None:
+paras_G['generate_airports_from_traffic'] = False
+if paras_G['file_airports_sec'] == None and not paras_G['generate_airports_from_traffic']:
 	paras_G['airports_sec'] = None
 	if paras_G['airports_sec'] == None:
 		paras_G['nairports_sec'] = 10
-paras_G['pairs_sec'] = [] 	# List of possible connections between airports. Leave [] to 
-							# to select all possible connections.
+
 
 # ------------- Weights --------------
 # Here the weights are the times needed to cross edges (between navpoints). 
@@ -85,6 +84,18 @@ if paras_G['file_weights'] == None and not paras_G['generate_weights_from_traffi
 	paras_G['par_weights'] = 20. # average crossing time for napvoint network in minutes.
 	paras_G['typ_weights'] = 'constant'
 
+
+# ------------- Connections --------------
+# Connections are the pairs of airports open to flights.
+# Leave "None" to have all possible pairs. The other option is 'BA'
+# to create a Barabasi-Albert graph.
+
+paras_G['generate_connections_from_traffic'] = False
+if not paras_G['generate_connections_from_traffic']:
+	paras_G['connections'] = None
+	paras_G['pairs_sec'] = [] 	# List of possible connections between airports. Leave [] to 
+								# to select all possible connections.
+	paras_G['connections_options'] = {}
 paras_G['min_dis'] = 5      # minimum number of nodes (navpoints) between entry and exit.
 
 

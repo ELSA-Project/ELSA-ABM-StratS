@@ -2113,7 +2113,7 @@ def build_path(paras,version,full=True, prefix=None, suffix=None):
     if prefix == None:
         prefix = paras['main_rep']
     mode=paras['mode']
-    big_filtre=paras['filtre'] + '_' + paras['type_zone'] + paras['zone']
+    big_filtre=paras['filtre'] + '_' + paras['type_zone'] + str(paras['zone'])
     if not paras['micromode']:
         period= str(paras['starting_date'][0]) + '-' + str(paras['starting_date'][1]) + '-' + str(paras['starting_date'][2]) + '+' + str(paras['n_days']-1)
         if paras['collapsed']:
@@ -2122,11 +2122,14 @@ def build_path(paras,version,full=True, prefix=None, suffix=None):
         period=date_human(paras['timeStart']) + '--' + date_human(paras['timeEnd'])
     
     rep = prefix
-    if  len(paras['zone'])==2:
-        rep += paras['zone'] + '_v' + version + "/" + big_filtre + "/" + period + '_d' + str(paras['d'])
+    if not type(paras['zone']) in [list, tuple]:
+        if len(paras['zone'])==2:
+            rep += paras['zone'] + '_v' + version + "/" + big_filtre + "/" + period + '_d' + str(paras['d'])
+        else:
+            rep += paras['zone'][:2] + '_v' + version + "/" + big_filtre + "/" + paras['zone'] + '_' + period + '_d' + str(paras['d'])
     else:
-        rep += paras['zone'][:2] + '_v' + version + "/" + big_filtre + "/" + paras['zone'] + '_' + period + '_d' + str(paras['d'])
-        
+        rep += str(paras['zone']) + '_v' + version + "/" + big_filtre + "/" + period + '_d' + str(paras['d'])
+
     if mode!='airports':
         if paras['use_base_net']:
             rep = rep + '_net'
@@ -2419,13 +2422,26 @@ def _OLD_select_layer_sector(password_db, airac, zone, level = 250.):
     return [rrr[0] for rrr in rr]
 
 def build_network_based_on_shapes(password_db, airac, zone, layer):
+    if not type(zone) in [list, tuple]:
+        if zone!='ECAC':
+            zone = [zone]
+        else:
+            zone = list_countries
+
+    zone_string = ''
+    for z in zone:
+        zone_string += """S.sectorId like '""" + z + "%' OR "
+
+    zone_string = zone_string[:-4]
+
     # Finding the max height of sectors in this area
     db=_mysql.connect("localhost","root", password_db,"ElsaDB_A" + str(airac), conv=my_conv)
     query="""SELECT max(maxHeight)
     FROM SectorSlice as SS, Sector as S, Airblock as A
-    WHERE SS.sectorUId=S.uniqueId AND S.sectorId like '""" + zone + """%' 
-    AND A.uniqueId=SS.airblockUId AND S.type='ES' AND S.airspaceCategory='_' """
-
+    WHERE SS.sectorUId=S.uniqueId AND (""" + zone_string + """) 
+    AND A.uniqueId=SS.airblockUId """ +\
+    """AND S.type='ES' AND S.airspaceCategory='_' """
+    print query
     db.query(query)
     r=db.store_result()
     max_height = float(r.fetch_row(maxrows=0,how=0)[0][0])
@@ -2436,8 +2452,8 @@ def build_network_based_on_shapes(password_db, airac, zone, layer):
         layer=max_height-5
         print "so I set it to the maximum height - 5FL (", layer, ")."
 
-    sectors = select_layer_sector(password_db, airac, zone, layer)
-    with open(jn(path_modules, 'All_shapes_334.pic'),'r') as f:
+    sectors = select_layer_sector(password_db, airac, zone_string, layer)
+    with open(jn(path_modules, 'All_shapes_' + str(airac) + '.pic'),'r') as f:
         all_shapes = pickle.load(f)
 
     shapes = {s:all_shapes[s]['boundary'][0] for s in sectors}
@@ -2455,7 +2471,8 @@ def build_network_based_on_shapes(password_db, airac, zone, layer):
                 if not cut_shape.is_empty:
                     shapes[sec1] = cut_shape
                 else:
-                    del shapes[sec1]                    
+                    if sec1 in shapes.keys():   
+                        del shapes[sec1]                  
     # print "Removing sectors", set(to_remove)
     # for s in set(to_remove):
     #     del shapes[s]
@@ -2472,7 +2489,7 @@ def build_network_based_on_shapes(password_db, airac, zone, layer):
 
     return G, shapes
 
-def select_layer_sector(password_db, airac, zone, layer):
+def select_layer_sector(password_db, airac, zone_string, layer):
     """
     Taken from Module/build_one_layer_sector.py
     """
@@ -2482,8 +2499,11 @@ def select_layer_sector(password_db, airac, zone, layer):
     
     query=  """SELECT S.sectorId,  REPLACE(REPLACE(REPLACE(AsText(A.boundary), '(',''),'POLYGON',''),')','') as boundary
     FROM SectorSlice as SS, Sector as S, Airblock as A
-    WHERE minHeight <""" +str(layer) + """ AND maxHeight >""" + str(layer) + """ AND SS.sectorUId=S.uniqueId AND S.sectorId like '""" + zone + \
-    """%' AND A.uniqueId=SS.airblockUId AND S.type='ES' AND S.airspaceCategory='_' ORDER BY S.sectorId"""
+    WHERE minHeight <""" +str(layer) + """ AND maxHeight >""" + str(layer) +\
+    """ AND SS.sectorUId=S.uniqueId AND (""" + zone_string + ")" +  \
+    """ AND A.uniqueId=SS.airblockUId """+\
+    """ AND S.type='ES' AND S.airspaceCategory='_' """ + \
+    """ ORDER BY S.sectorId"""
 
     db.query(query)
         
@@ -2764,12 +2784,48 @@ class TrajConverter(object):
     def set_G(self, G):
         self.G = G
 
-    def check_trajectories(self, trajectories):
+    def check_trajectories(self, trajectories, fmt_in):
         """
         Check that the trajectories are compliant with the nodes of the network.
+        Check the link between nodes too.
+        DOES NOT CHECK THE TIME OF TRANSFER.
         """
-        # TODO
-        pass
+
+        accepted_fmts = ['(x, y, z, t)', '(x, y, z, t, s)', '(n), t', '(n, z), t']
+
+        print 'Checking for inconsistency between trajectories and network (can take a while)...',
+        try:
+            assert fmt_in in accepted_fmts
+        except AssertionError:
+            print "Unrecognized format." 
+            raise
+
+        if fmt_in in ['(x, y, z, t)', '(x, y, z, t, s)']:
+            print 'There is nothing to check with coordinate-based trajectories!'
+        else:
+            if fmt_in == '(n), t':
+                raise Exception("Not implemented yet.")
+            elif fmt_in == '(n, z), t':
+                for i, traj in enumerate(trajectories):
+                    # spatial part
+                    geo = traj[0] 
+                    for n, z in geo:
+                        try:
+                            assert n in self.G.nodes()
+                        except AssertionError:
+                            print 'The node', n, 'from trajectory no', i
+                            print "is not in the nodes of the network." 
+
+                    for j in range(len(geo)-1):
+                        n, z = geo[j]
+                        m, zz = geo[j+1]
+                        try:
+                            assert (n, m) in self.G.edges()
+                        except AssertionError:
+                            print 'The segment (', n, ', ', m, ') from trajectory no', i
+                            print "is not in the edges of the network." 
+        print 'nothing to declare, captain.'
+
 
     def convert(self, trajs, fmt_in, fmt_out, **kwargs):
         """
@@ -3038,7 +3094,14 @@ class TrajConverter(object):
                 else:
                     x = self.G.node[n]['coord'][0]/60.
                     y = self.G.node[n]['coord'][1]/60.
-                t = d_t if j==0 else date_st(delay(t) + 60.*self.G[n][trajectory[j-1][0]]['weight'])
+                try:
+                    #t = d_t if j==0 else date_st(delay(t) + 60.*self.G[n][trajectory[j-1][0]]['weight'])
+                    t = d_t if j==0 else date_st(delay(t) + 60.*self.G[trajectory[j-1][0]][n]['weight'])
+                except KeyError:
+                    print 'no of traj:', i
+                    print 'n=', n
+                    raise
+
                 if remove_flights_after_midnight and list(t[:3])!=list(starting_date[:3]):
                     break
                 if not put_sectors:
