@@ -57,6 +57,7 @@ class SimulationStory(Simulation):
 		self.current_flight_index = -1
 		self.current_flight_plan_index = 0
 		self.found = True
+		self.idx = -1 # For tracking steps
 
 	def next_flight(self):
 		self.current_flight_index += 1
@@ -87,6 +88,7 @@ class SimulationStory(Simulation):
 			return {'text_info':"Simulation finished, no more flights.", 'stop':True, 'satisfaction':satisfaction}
 
 	def step(self):
+		self.idx +=1
 		flight = self.queue[self.current_flight_index]
 
 		if self.current_flight_plan_index<len(flight.FPs) and not self.found:

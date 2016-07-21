@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'interface_template_new.ui'
 #
-# Created: Mon May 16 17:20:08 2016
+# Created: Mon May 16 18:10:50 2016
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -174,6 +174,9 @@ class Ui_StrategicLayer(object):
         self.speedSpinBox.setProperty("value", 1)
         self.speedSpinBox.setObjectName(_fromUtf8("speedSpinBox"))
         self.horizontalLayout_2.addWidget(self.speedSpinBox)
+        self.oneStepBackward = QtGui.QPushButton(self.verticalLayoutWidget_2)
+        self.oneStepBackward.setObjectName(_fromUtf8("oneStepBackward"))
+        self.horizontalLayout_2.addWidget(self.oneStepBackward)
         self.pause = QtGui.QPushButton(self.verticalLayoutWidget_2)
         self.pause.setObjectName(_fromUtf8("pause"))
         self.horizontalLayout_2.addWidget(self.pause)
@@ -185,9 +188,12 @@ class Ui_StrategicLayer(object):
         self.horizontalLayout_2.addWidget(self.play_one_step)
         spacerItem2 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout_2.addItem(spacerItem2)
-        self.saveGraphs = QtGui.QPushButton(self.verticalLayoutWidget_2)
-        self.saveGraphs.setObjectName(_fromUtf8("saveGraphs"))
-        self.horizontalLayout_2.addWidget(self.saveGraphs)
+        self.label_36 = QtGui.QLabel(self.verticalLayoutWidget_2)
+        self.label_36.setObjectName(_fromUtf8("label_36"))
+        self.horizontalLayout_2.addWidget(self.label_36)
+        self.jumpSpinBox = QtGui.QSpinBox(self.verticalLayoutWidget_2)
+        self.jumpSpinBox.setObjectName(_fromUtf8("jumpSpinBox"))
+        self.horizontalLayout_2.addWidget(self.jumpSpinBox)
         self.verticalLayout_4.addLayout(self.horizontalLayout_2)
         self.verticalLayoutWidget_3 = QtGui.QWidget(self.main_splitter)
         self.verticalLayoutWidget_3.setObjectName(_fromUtf8("verticalLayoutWidget_3"))
@@ -252,6 +258,9 @@ class Ui_StrategicLayer(object):
         self.label_11.setObjectName(_fromUtf8("label_11"))
         self.horizontalLayout.addWidget(self.label_11)
         self.verticalLayout_3.addLayout(self.horizontalLayout)
+        self.saveGraphs = QtGui.QPushButton(self.verticalLayoutWidget_3)
+        self.saveGraphs.setObjectName(_fromUtf8("saveGraphs"))
+        self.verticalLayout_3.addWidget(self.saveGraphs)
         self.verticalLayoutWidget = QtGui.QWidget(self.main_splitter)
         self.verticalLayoutWidget.setObjectName(_fromUtf8("verticalLayoutWidget"))
         self.verticalLayout = QtGui.QVBoxLayout(self.verticalLayoutWidget)
@@ -312,12 +321,14 @@ class Ui_StrategicLayer(object):
         self.label_35.setText(_translate("StrategicLayer", "30", None))
         self.magicButton.setText(_translate("StrategicLayer", "Magic Button", None))
         self.label_28.setText(_translate("StrategicLayer", "Step per second", None))
+        self.oneStepBackward.setText(_translate("StrategicLayer", "One Step Backward", None))
         self.pause.setText(_translate("StrategicLayer", "Pause", None))
         self.play.setText(_translate("StrategicLayer", "Play", None))
-        self.play_one_step.setText(_translate("StrategicLayer", "Play One step", None))
-        self.saveGraphs.setText(_translate("StrategicLayer", "Save Graphs and History", None))
+        self.play_one_step.setText(_translate("StrategicLayer", "One Step Forward", None))
+        self.label_36.setText(_translate("StrategicLayer", "Jump to Step", None))
         self.normalized.setText(_translate("StrategicLayer", "Normalized Departure Times", None))
         self.label_27.setText(_translate("StrategicLayer", "Satisfaction", None))
         self.label_26.setText(_translate("StrategicLayer", "Absolute", None))
         self.label_11.setText(_translate("StrategicLayer", "Diff.", None))
+        self.saveGraphs.setText(_translate("StrategicLayer", "Save Graphs and History", None))
 

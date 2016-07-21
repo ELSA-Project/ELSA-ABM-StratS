@@ -1,3 +1,7 @@
 Performance
 ===========
 For all number flights, filling the flight plans initially is what takes most of the time (twice as much as allocating the queue). One could use the same simulation object and reshuffle the queue for other iterations in order to speed the code.
+
+TODO
+====
+Fix the capacity view with replay.

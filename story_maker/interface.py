@@ -35,6 +35,10 @@ pyuic4 interface_template.ui -o design.py
 
 """
 
+class DummyNM(object):
+	def __init__(self, control_time_window):
+		self.control_time_window = control_time_window
+
 class DummySimu(Simulation):
 	"""
 	Used for replay of dumped history
@@ -49,7 +53,9 @@ class DummySimu(Simulation):
 		print 'Loading history...'
 		with open(self.load_file, 'r') as f:
 			self.updates, self.queue = pickle.load(f)
-		self.current_flight_index = -1
+		self.idx = -1
+		control_time_window = 30
+		self.NM = DummyNM(control_time_window)
 
 	def prepare_simu(self):
 		"""
@@ -59,8 +65,8 @@ class DummySimu(Simulation):
 		self.load_history()
 
 	def step(self):
-		self.current_flight_index += 1
-		return self.updates[self.current_flight_index]
+		self.idx += 1
+		return self.updates[self.idx]
 
 class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 	def __init__(self, parent=None, simu=None, epsilon=0.05, normal_color_nodes=nice_colors[0],\
@@ -75,10 +81,12 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.velocity = play_velocity
 
 		if load_file==None:
+			self.replay = False
 			simu = SimulationStory(paras, G=paras['G'])
-			self.print_information("Preparing NEW simulation with parameters:")
+			self.print_information("Running NEW simulation with parameters:")
 		else:
 			keep_history = False
+			self.replay = True
 			simu = DummySimu(jn(rep_res, load_file), paras, G=paras['G'])
 			self.print_information("REPLAYING simulation from file:" + load_file + "\nwith parameters:")
 
@@ -97,6 +105,8 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.pause.clicked.connect(self.pause_simulation)
 		self.play.clicked.connect(self.play_simulation)
 		self.play_one_step.clicked.connect(self.play_one_step_simulation)
+		self.oneStepBackward.clicked.connect(self.one_step_backward)
+		self.oneStepBackward.setEnabled(self.replay)
 		self.capacitySlider.valueChanged.connect(self.update_map)
 		self.showCapacities.stateChanged.connect(self.update_map)
 		self.normalized.stateChanged.connect(self.update_departure_times)
@@ -104,6 +114,11 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.speedSpinBox.valueChanged.connect(self.change_velocity)
 		self.magicButton.clicked.connect(self.magic)
 		self.saveGraphs.clicked.connect(self.save_figures)
+		self.jumpSpinBox.valueChanged.connect(self.jump_to_step)
+		self.jumpSpinBox.setEnabled(self.replay)
+		if self.replay:
+			self.jumpSpinBox.setMaximum(len(self.simu.updates)-1)
+			
 
 		# These are pixels!
 		self.main_splitter.setSizes([600, 300, 200])
@@ -129,6 +144,8 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.keep_history = keep_history
 		self.history = []
 		self.save_file = save_file
+
+		self.update_status = {}
 
 	def change_velocity(self, event):
 		self.velocity = self.speedSpinBox.value()
@@ -196,7 +213,7 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		return ind
 
 	def get_queue(self):
-		return self.update.get('queue', None)
+		return self.update_status.get('queue', None)
 
 	def indicate_origin_destination(self, origin, destination, size=400., \
 		marker='h', fontsize=10, shift_numbers=(-0.015, -0.015)):
@@ -211,9 +228,24 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		pos_text = array((x, y)) + array(shift_numbers)
 		self.axes.annotate('D', (x,y), size=fontsize, xytext=pos_text, zorder=21, color='w')
 
+	def jump_to_step(self):
+		if self.replay:
+			# Ensure that the button does no go over the maximum number of flights.
+			self.print_information("Jumping to step", self.jumpSpinBox.value())
+			self.print_story("\n\n Jump to step", self.jumpSpinBox.value(), "\n\n")
+			self.simu.idx = self.jumpSpinBox.value() - 1
+			self.play_one_step_simulation()
+
 	def magic(self):
 		current_times = [f.fp_selected.t/60. for f in self.get_queue() if hasattr(f, 'accepted') and f.accepted]
 		self.print_information(current_times)
+
+	def one_step_backward(self):
+		if self.simu.idx>0:
+			self.simu.idx -= 2
+			self.print_information("Jumping to step", self.simu.idx+1)
+			self.print_story("\n\n Jump to step", self.simu.idx+1, "\n\n")
+			self.play_one_step_simulation()
 
 	def on_click(self, event):
 		if event.button!=1:
@@ -242,15 +274,15 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.stop = True
 
 	def play_one_step_simulation(self):
-		self.update = self.simu.step()
+		self.update_status = self.simu.step()
 
-		self.print_story(self.update.get('text_story', None))
-		self.print_information(self.update.get('text_info', None))
+		self.print_story(self.update_status.get('text_story', None))
+		self.print_information(self.update_status.get('text_info', None))
 
 		if self.keep_history:
 			self.history.append(self.update)
 
-		if not self.update.get('stop', False):			
+		if not self.update_status.get('stop', False):			
 			self.update_map()
 			
 			self.update_departure_times()
@@ -337,18 +369,25 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 				text_tot += str(text)
 			self.information.append(text_tot)
 
-	def print_story(self, text):
-		if text!=None:
-			self.story.append(text)
+	def print_story(self, *texts):
+		if len(texts)>0 and texts[0]!=None:
+			text_tot = ''
+			for text in texts:
+				text_tot += str(text)
+			self.story.append(text_tot)
 	
 	def save_figures(self):
 		self.print_information("Saving graphs and history in " + self.rep_res)
-		it = self.simu.current_flight_index
+		it = self.simu.idx
+		pos_init = self.satisfactionSlider.sliderPosition()
 		self.satisfactionSlider.setSliderPosition(0)
-		self.fig_sat.savefig(jn(self.rep_res, 'satisfactions_Nf' + str(it) +  '.png'))
+		self.fig_sat.savefig(jn(self.rep_res, 'satisfactions_step' + str(it) +  '.png'))
 		self.satisfactionSlider.setSliderPosition(1)
-		self.fig_sat.savefig(jn(self.rep_res, 'diff_sats_Nf' + str(it) +  '.png'))
-		self.fig_dt.savefig(jn(self.rep_res, 'departure_times_Nf' + str(it) +  '.png'))
+		self.fig_sat.savefig(jn(self.rep_res, 'diff_sats_step' + str(it) +  '.png'))
+		self.fig_dt.savefig(jn(self.rep_res, 'departure_times_step' + str(it) +  '.png'))
+
+		# Put the satisfaction slider back in initial position
+		self.satisfactionSlider.setSliderPosition(pos_init)
 
 		if self.keep_history:
 			self.dump_history()
@@ -428,7 +467,7 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.canvas_dt.draw()
 
 	def update_map(self):
-		current_map_update = self.update.get('map_update_info', None)
+		current_map_update = self.update_status.get('map_update_info', {})
 
 		self.axes.clear()   
 		
@@ -450,7 +489,7 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.canvas.draw()
 
 	def update_satisfaction(self):
-		satisfaction = self.update.get('satisfaction', None)
+		satisfaction = self.update_status.get('satisfaction', None)
 		popS = (1., 0., 0.000001)#self.par_companyS
 		popR = (1., 0., 1000000.)#self.par_companyR
 
@@ -508,15 +547,15 @@ if __name__ == '__main__':
 		print "===================================="
 		seed(see)
 	#paras_file = None if len(sys.argv)==1 else sys.argv[1]
-	#paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/tests/my_paras_DiskWorld_test.py'
-	save_rep = jn(result_dir, 'stories')
+	paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/tests/my_paras_DiskWorld_test.py'
+	save_rep = jn(result_dir, 'model1/3.1/DiskWorld/stories/big2')
 	os.system("mkdir -p " + save_rep)
-	paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/abm_strategic_model1/my_paras/my_paras_DiskWorld_for_story.py'
+	#paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/abm_strategic_model1/my_paras/my_paras_DiskWorld_for_story.py'
 	paras = read_paras(paras_file=paras_file)
 	
-	history_save_file = "history_Delta_t22.pic"
+	history_save_file = "test.pic"
 	
 	#history_load_file = '../tests/history_test.pic'
-	#history_load_file = None
-	history_load_file = jn(save_rep, "history_big.pic")
+	history_load_file = None
+	#history_load_file = jn(save_rep, "history_big2.pic")
 	main(paras, keep_history=True, save_file=history_save_file, load_file=history_load_file, rep_res=save_rep)
