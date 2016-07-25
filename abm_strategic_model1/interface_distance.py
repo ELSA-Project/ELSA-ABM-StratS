@@ -11,6 +11,7 @@ sys.path.insert(1, '..')
 import pickle
 from string import split
 from shapely.geometry import LineString, MultiPolygon, Point
+from shapely.ops import cascaded_union
 
 from libs.tools_airports import get_set, __version__ as distance_version, build_path, build_network_based_on_shapes, TrajConverter
 from libs.general_tools import date_generation, draw_network_and_patches
@@ -86,7 +87,7 @@ def paras_strategic(zone='LF', airac=334, starting_date=[2010,5,6], n_days=1, cu
 
 	return paras
 
-def build_paras_G(zone='LF', data_version=None, layer=350., checks=True, show=True, name='LF', **kwargs_distance):
+def build_paras_G(zone='LF', data_version=None, layer=350., checks=True, show=True, name='LF', max_sectors=None, **kwargs_distance):
 	#from paras_G import paras_G # TODO Change this, this is really bad.
 
 	paras_G = Paras({})
@@ -98,17 +99,13 @@ def build_paras_G(zone='LF', data_version=None, layer=350., checks=True, show=Tr
 	seth = get_set(paras, force=False)
 	G_dummy, flights = seth.G, seth.flights
 
-	paras_G['G_dummy'] = G_dummy # TO REMOVE AFTER DEBUG
-
-	trajconverter = TrajConverter()
-	trajconverter.set_G(G_dummy)
-
-	#flights = trajconverter.convert(flights, fmt_in=)
+	#paras_G['G_dummy'] = G_dummy # TO REMOVE AFTER DEBUG
 
 	# Get sector network
 	paras_G['file_net_sec'] = None
 	G, polygons = build_network_based_on_shapes(paras['password_db'], paras['airac'], zone, layer)
 	polygons = fix_overlapping_polygons(polygons)
+	G, polygons = recompute_centroids(G, polygons)
 	paras_G['net_sec'] = G
 	print "Number of nodes in sec network:", len(G.nodes())
 	paras_G['type_of_net'] = 'R'
@@ -119,12 +116,30 @@ def build_paras_G(zone='LF', data_version=None, layer=350., checks=True, show=Tr
 	print "Number of polygons:", len(paras_G['polygons'])
 
 	# Select the flights used to build the capacities and weights
+	print 'Converting trajectories'
+	trajconverter = TrajConverter()
+	trajconverter.set_G(G_dummy)
+
+	new_trajs = convert_distance_trajectories_to_abm_format(flights.values()[:], fmt='(n, z, t)')
+
+	trajconverter = TrajConverter()
+	trajconverter.set_G(G_dummy)
+
+	converted_trajs = trajconverter.convert(new_trajs, fmt_in='(n, z, t)', fmt_out='(x, y, z, t)', input_minutes=True)
+
+	final_trajs = detect_sectors(polygons, converted_trajs)
+
+	if max_sectors!=None:
+		G, polygons, final_trajs = reduce_sectors(max_sectors, G, polygons, final_trajs)
+
 	paras_G['file_flights_selected'] = None
-	paras_G['flights_selected'] = flights.values()
+	paras_G['flights_selected'] = final_trajs
+	paras_G['format_flights'] = '(n, z, t)'
 
 	# Generate capacities based on traffic
 	paras_G['file_capacities'] = None
 	paras_G['generate_capacities_from_traffic'] = True
+	paras_G['min_capacity'] = 1
 
 	# Take airports from traffic
 	paras_G['file_airports_sec'] = None
@@ -133,9 +148,11 @@ def build_paras_G(zone='LF', data_version=None, layer=350., checks=True, show=Tr
 	# Generate weights (times of travel) based on traffic
 	paras_G['file_weights'] = None
 	paras_G['generate_weights_from_traffic'] = True
+	paras_G['generate_only_average_weight_from_traffic'] = True
 
 	# Take connections from data
 	paras_G['generate_connections_from_traffic'] = True
+	paras_G['min_dis'] = 2
 
 	# Other parameters
 	paras_G['Nfp'] = 10	
@@ -264,7 +281,7 @@ def detect_sectors(polygons, trajectories):
 
 	Format of the trajectories should be '(x, y, z, t)'
 
-	The output format is '(n, z), t', but the nodes are the projected sectors
+	The output format is '(n, z, t)', but the nodes are the projected sectors
 	(instead of the sectors from the original sectors).
 
 	"""
@@ -281,10 +298,8 @@ def detect_sectors(polygons, trajectories):
 			sec1, sec2 = [], []
 			for name, shape in polygons.items():
 				if shape.contains(pt1):
-					print 'POEUT1'
 					sec1.append(name)
 				if shape.contains(pt2):
-					print 'POEUT2'
 					sec2.append(name)
 
 			if len(sec1)==0:
@@ -299,13 +314,12 @@ def detect_sectors(polygons, trajectories):
 				pass #?
 			elif len(sec2)==1:
 				if sec2[0]!=prev_sec:
-					new_traj.append((sec2[0], z2))
+					new_traj.append((sec2[0], z2, t2))
 					prev_sec = sec2[0]
 			else:
 				raise Exception('This point:', pt2, 'is within several polygons:', sec2)
 
-				#raise Exception('A segment crosses three polygons.')
-		new_traj = [new_traj, traj[0][3]]
+		#new_traj = [new_traj, traj[0][3]]
 		new_trajectories.append(new_traj)
 
 	return new_trajectories
@@ -355,6 +369,42 @@ def fix_overlapping_polygons(polygons):
 
 	return polygons
 
+def recompute_centroids(G, polygons):
+	for n in G.nodes():
+		pol = polygons[n]
+		centre = pol.centroid.coords[0]
+		G.node[n]['coord'] = list(centre)
+
+	return G, polygons
+
+def reduce_sectors(N, G, polygons, trajectories, fmt_in='(n, z, t)'):
+	# Overall center
+	centre = cascaded_union(polygons.values()).centroid
+	to_remove = sorted(G.nodes(), key=lambda x:polygons[x].centroid.distance(centre), reverse=True)
+	distances = sorted([polygons[x].distance(centre) for x in G.nodes()])
+	n_to_remove = len(G)-N
+	to_remove = to_remove[:n_to_remove]
+
+	# Reduce nodes and polygons
+	for n in to_remove:
+		del polygons[n]
+		G.remove_node(n)
+
+	print 'Removed', n_to_remove, 'sectors'
+
+	n_traj = len(trajectories)
+	for traj in trajectories[:]:
+		for n, z, t in traj:
+			if not n in G.nodes() and traj in trajectories:
+				trajectories.remove(traj)
+				continue
+
+	print 'Removed', n_traj-len(trajectories), 'trajectories'
+
+	return G, polygons, trajectories
+
+
+
 if __name__=='__main__':
 	#build_net_distance(zone='LF', show=True)
 	paras_G = build_paras_G(zone='ECAC',#['LF', 'LI'],
@@ -369,36 +419,47 @@ if __name__=='__main__':
 							starting_date=[2010,5,6],
 							password_db='4ksut79f',
 							type_zone='EXT',
-							redo_FxS=True)
+							redo_FxS=True,
+							max_sectors=60)
 
 	
 
-	# #print paras_G['flights_selected'][0]
-	new_trajs = convert_distance_trajectories_to_abm_format(paras_G['flights_selected'], fmt='(n, z), t')
+	# # #print paras_G['flights_selected'][0]
+	# new_trajs = convert_distance_trajectories_to_abm_format(paras_G['flights_selected'], fmt='(n, z), t')
 
-	# #print paras_G['polygons'].keys()
+	# # #print paras_G['polygons'].keys()
 
-	trajconverter = TrajConverter()
-	trajconverter.set_G(paras_G['G_dummy'] )
+	# trajconverter = TrajConverter()
+	# trajconverter.set_G(paras_G['G_dummy'] )
 
-	converted_trajs = trajconverter.convert(new_trajs, fmt_in='(n, z), t', fmt_out='(x, y, z, t)', input_minutes=True)
+	# converted_trajs = trajconverter.convert(new_trajs, fmt_in='(n, z), t', fmt_out='(x, y, z, t)', input_minutes=True)
 
-	print
-	print paras_G['polygons'].values()[0]
-	print
-	print converted_trajs[0]
-	print
+	# print
+	# print paras_G['polygons'].values()[0]
+	# print
+	# print converted_trajs[0]
+	# print
 
-	final_trajs = detect_sectors(paras_G['polygons'], converted_trajs[:10])
+	# final_trajs = detect_sectors(paras_G['polygons'], converted_trajs[:10])
 
-	for traj in final_trajs[:10]:
-		print traj
-		print
+	# for traj in final_trajs[:10]:
+	# 	print traj
+	# 	print
 
 	if 1:
-		draw_network_and_patches(paras_G['net_sec'], None, paras_G['polygons'], 
+		from prepare_network import extract_weights_from_traffic, hard_infrastructure
+		from simAirSpaceO import Net 
+		G = Net()
+		G.type = 'sec' #for sectors
+		G.type_of_net = paras_G['type_of_net']
+		hard_infrastructure(G, paras_G)
+		weights = extract_weights_from_traffic(G, paras_G['flights_selected'], fmt_in='(n, z, t)')
+		G.fix_weights(weights, typ='traffic')
+		G.typ_weights = 'data'
+		draw_network_and_patches(G, None, paras_G['polygons'], 
 						draw_navpoints_edges=False,
-						draw_sectors_edges=False, 
+						draw_sectors_edges=True, 
+						scale_edges=True,
 						rep='.', 
 						save=False, 
 						name='network',
@@ -408,6 +469,8 @@ if __name__=='__main__':
 						trajectories_type='navpoints', 
 						dpi = 100, 
 						figsize = None)
+
+
 
 	# trajectories = produce_M1_trajs_from_data(zone='LF', put_sectors=False)
 	# for traj in trajectories[:5]:

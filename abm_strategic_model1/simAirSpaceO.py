@@ -1057,29 +1057,21 @@ class Net(nx.Graph):
 				for p in v:
 					print ' - ', p, len(p), self.weight_path(p)
 	
-	def add_airports(self, airports, min_dis, pairs=[], C_airport=10, singletons=False):
+	def add_airports(self, airports, C_airport=10):
 		"""
-		Add airports given by user. The pairs can be given also by the user, 
-		or generated automatically, with minimum distance min_dis.
+		Add airports given by user. 
 
 		Parameters
 		----------
-		min_dis : int 
-			minimum distance -- in nodes, EXCLUDING THE AIRPORTS -- betwen a pair of airports.
-		pairs : list of 2-tuples, optional
-			Pairs of nodes for connections. If [], all possible pairs between airports are computed 
-			(given min_dis)
 		C_airport : int, optional
 			Capacity of the sectors which are airports. They are used only by flights which are
 			departing or lending in this area. It is different from the standard capacity key
 			which is used for flights crossing the area, which is set to 10000.
-		singletons : boolean, optional
-			If True, pairs in which the source is identical to the destination are authorized 
-			(but min_dis has to be smaller or equal to 2.)
 		
 		Notes
 		-----
 		New in 3.0.0: taken from Model 2
+		Changed in 3.2.0: removed connections generation.
 
 		(From Model 2)
 		Changed in 2.9.8: changed name to add_airports. Now the airports are added
@@ -1092,20 +1084,20 @@ class Net(nx.Graph):
 		else:
 			self.airports = np.array(list(set(list(self.airports) + list(airports))))
 			
-		if not hasattr(self, "short"):
-			self.short = {}
+		# if not hasattr(self, "short"):
+		# 	self.short = {}
 
-		if pairs==[]:
-			for ai in self.airports:
-				for aj in self.airports:
-					if len(nx.shortest_path(self, ai, aj))-2>=min_dis and ((not singletons and ai!=aj) or singletons):
-						if not self.short.has_key((ai,aj)):
-							self.short[(ai, aj)] = []
-		else:
-			for (ai,aj) in pairs:
-				 if ((not singletons and ai!=aj) or singletons):
-					if not self.short.has_key((ai,aj)):
-						self.short[(ai, aj)] = []
+		# if pairs==[]:
+		# 	for ai in self.airports:
+		# 		for aj in self.airports:
+		# 			if len(nx.shortest_path(self, ai, aj))-2>=min_dis and ((not singletons and ai!=aj) or singletons):
+		# 				if not self.short.has_key((ai,aj)):
+		# 					self.short[(ai, aj)] = []
+		# else:
+		# 	for (ai,aj) in pairs:
+		# 		 if ((not singletons and ai!=aj) or singletons):
+		# 			if not self.short.has_key((ai,aj)):
+		# 				self.short[(ai, aj)] = []
 
 		for a in airports:
 			#self.node[a]['capacity']=100000                # TODO: check this.
@@ -1428,7 +1420,31 @@ class Net(nx.Graph):
 
 		self.add_airports(*args, **kwargs)
 
-	def generate_connections(self, typ=None, options={}):
+	def fix_capacities(self, capacities, **kwargs):
+		"""
+
+		Notes
+		-----
+		New in 3.2.0
+
+		"""
+		
+		for n, c in capacities.items():
+			self.node[n]['capacity'] = c
+
+	def fix_weights(self, weights, **kwargs):
+		"""
+
+		Notes
+		-----
+		New in 3.2.0
+
+		"""
+		
+		for (n1, n2), w in weights.items():
+			self[n1][n2]['weight'] = w
+
+	def generate_connections(self, typ=None, options={}, min_dis=2):
 		"""
 		Generate available pairs of airports.
 
@@ -1440,6 +1456,9 @@ class Net(nx.Graph):
 		options: dict, optional
 			Dictionary of options for the generation. If typ=='BA', this 
 			dictionary should have the key 'mean_k' at least
+		min_dis: int, optional
+			Minimum distance in nodes between two connected airports
+			(without counting origin and destination)
 
 		Notes
 		-----
@@ -1458,7 +1477,7 @@ class Net(nx.Graph):
 			links2 = [(self.airports[j], self.airports[i]) for i, j in AG.edges()]
 			self.short = {(ai,aj):[] for ai, aj in links+links2}
 
-	def generate_airports(self, nairports, min_dis, C_airport=10):
+	def generate_airports(self, nairports, C_airport=10):
 		"""
 		Generate nairports airports. Build the accessible pairs of airports for this network
 		with a  minimum distance min_dis.
@@ -1716,8 +1735,8 @@ class Net(nx.Graph):
 
 		return spath_new
 
-	def set_connections(self, connections):
-		self.short = {(ai,aj):[] for ai, aj in connections}
+	def set_connections(self, connections, min_dis=2):
+		self.short = {(ai,aj):[] for ai, aj in connections if len(nx.shortest_path(self, ai, aj))-2>=min_dis}
 		
 	def shut_sector(self,n):
 		for v in nx.neighbors(self,n):

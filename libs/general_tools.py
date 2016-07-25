@@ -58,7 +58,7 @@ def flip_polygon(pol):
     return Polygon([(p[1], p[0]) for p in list(pol.exterior.coords)])
 
 def draw_network_and_patches(G, G_nav, polygons, draw_navpoints_edges=True, \
-    draw_sectors_edges=False, rep='.', save=True, name='network', \
+    draw_sectors_edges=False, scale_edges=False, rep='.', save=True, name='network', \
     show=True, flip_axes=False, trajectories=[], \
     trajectories_type='navpoints', dpi = 100, figsize = None):
     """
@@ -85,7 +85,7 @@ def draw_network_and_patches(G, G_nav, polygons, draw_navpoints_edges=True, \
         if polygons!=None:
             polygons={k:flip_polygon(pol) for k,pol in polygons.items()}
 
-    print  'Drawing networks and patches...'
+    print 'Drawing networks and patches...'
     fig = plt.figure(figsize = figsize)
     ax = fig.add_subplot(111)
     if polygons!=None:
@@ -105,6 +105,13 @@ def draw_network_and_patches(G, G_nav, polygons, draw_navpoints_edges=True, \
             for e in G_nav.edges():
                 plt.plot([G_nav.node[e[0]]['coord'][0],G_nav.node[e[1]]['coord'][0]],[G_nav.node[e[0]]['coord'][1],G_nav.node[e[1]]['coord'][1]],'k-',lw=0.2)#,lw=width(G[e[0]][e[1]]['weight'],max_wei),zorder=4)
     
+    if scale_edges:
+        max_w = max([G[n1][n2]['weight'] for n1, n2 in G.edges()])
+
+        for n1, n2 in G.edges():
+            w = G[n1][n2]['weight']
+            plt.plot([G.node[n1]['coord'][0],G.node[n2]['coord'][0]],[G.node[n1]['coord'][1],G.node[n2]['coord'][1]],'k-',lw=w/max_w*4.)
+
     if trajectories!=[]:
         if trajectories_type=='navpoints':
             H=G_nav

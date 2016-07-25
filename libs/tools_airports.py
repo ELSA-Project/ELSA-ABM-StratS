@@ -2826,14 +2826,13 @@ class TrajConverter(object):
                             print "is not in the edges of the network." 
         print 'nothing to declare, captain.'
 
-
     def convert(self, trajs, fmt_in, fmt_out, **kwargs):
         """
         General converter. Some information can be lost in the 
         conversion, depending on the input/output format.
         """
 
-        accepted_fmts = ['(x, y, z, t)', '(x, y, z, t, s)', '(n), t', '(n, z), t']
+        accepted_fmts = ['(x, y, z, t)', '(x, y, z, t, s)', '(n), t', '(n, z), t', '(n, z, t)', '(n, t)']
 
         try:
             assert fmt_in in accepted_fmts and fmt_out in accepted_fmts
@@ -2844,7 +2843,7 @@ class TrajConverter(object):
         if fmt_in==fmt_out:
             return trajs
 
-        if fmt_in in ['(n), t', '(n, z), t']:
+        if fmt_in in ['(n), t', '(n, z), t', '(n, z, t)']:
             if fmt_out in ['(x, y, z, t)', '(x, y, z, t, s)']:
                 if fmt_out=='(x, y, z, t)':
                     kwargs['put_sectors'] = False
@@ -2987,10 +2986,10 @@ class TrajConverter(object):
 
         """
         
-        if fmt_in=='(n), t':
+        if fmt_in in ['(n), t']:
             return self._convert_trajectories_no_alt(trajectories, **kwargs)
-        elif fmt_in=='(n, z), t':
-            return self._convert_trajectories_alt(trajectories, **kwargs)
+        elif fmt_in in ['(n, z), t', '(n, z, t)']:
+            return self._convert_trajectories_alt(trajectories, fmt_in=fmt_in, **kwargs)
         else:
             raise Exception("format", fmt, "is not implemented")
 
@@ -3052,7 +3051,7 @@ class TrajConverter(object):
             print "Dropped", len(trajectories) - len(trajectories_coords), "flights because they arrive after midnight."
         return trajectories_coords
 
-    def _convert_trajectories_alt(self, trajectories, put_sectors=False, input_minutes=False,
+    def _convert_trajectories_alt(self, trajectories, fmt_in='(n, z), t', put_sectors=False, input_minutes=False,
         remove_flights_after_midnight=False, starting_date=[2010, 5, 6, 0, 0, 0]):
         """
         Convert trajectories with navpoint names into trajectories with coordinate and time stamps.
@@ -3084,23 +3083,36 @@ class TrajConverter(object):
 
         """ 
 
+        assert fmt_in in ['(n, z), t', '(n, z, t)']
         trajectories_coords = []
-        for i, (trajectory, d_t) in enumerate(trajectories):
+        #for i, (trajectory, d_t) in enumerate(trajectories):
+        for i in range(len(trajectories)):
+            if fmt_in=='(n, z), t':
+                trajectory, d_t = trajectories[i]
+            else:
+                trajectory = trajectories[i]
             traj_coords = []
-            for j, (n, z) in enumerate(trajectory):
+            #for j, (n, z) in enumerate(trajectory):
+            for j in range(len(trajectory)):
+                if fmt_in=='(n, z), t':
+                    n, z = trajectory[j]
+                else:
+                    n, z, t = trajectory[j]
                 if not input_minutes:
                     x = self.G.node[n]['coord'][0]
                     y = self.G.node[n]['coord'][1]
                 else:
                     x = self.G.node[n]['coord'][0]/60.
                     y = self.G.node[n]['coord'][1]/60.
-                try:
-                    #t = d_t if j==0 else date_st(delay(t) + 60.*self.G[n][trajectory[j-1][0]]['weight'])
-                    t = d_t if j==0 else date_st(delay(t) + 60.*self.G[trajectory[j-1][0]][n]['weight'])
-                except KeyError:
-                    print 'no of traj:', i
-                    print 'n=', n
-                    raise
+
+                if fmt_in=='(n, z), t':
+                    try:
+                        #t = d_t if j==0 else date_st(delay(t) + 60.*self.G[n][trajectory[j-1][0]]['weight'])
+                        t = d_t if j==0 else date_st(delay(t) + 60.*self.G[trajectory[j-1][0]][n]['weight'])
+                    except KeyError:
+                        print 'no of traj:', i
+                        print 'n=', n
+                        raise
 
                 if remove_flights_after_midnight and list(t[:3])!=list(starting_date[:3]):
                     break

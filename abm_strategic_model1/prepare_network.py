@@ -27,10 +27,11 @@ from random import seed
 import matplotlib.pyplot as plt
 
 from simAirSpaceO import Net
-from utilities import read_paras
+from utilities import read_paras, extract_capacity_from_traffic, extract_weights_from_traffic, \
+extract_entry_exits_from_traffic, extract_airports_from_traffic
 
 from libs.paths import result_dir
-from libs.general_tools import draw_network_and_patches, voronoi_finite_polygons_2d
+from libs.general_tools import draw_network_and_patches, voronoi_finite_polygons_2d, delay
 
 
 version='3.1.0'
@@ -85,11 +86,11 @@ def automatic_name(G, paras_G):
        long_name+='_airports' +  str(G.airports[0]) + '_' + str(G.airports[1])
     elif len(G.airports)>2:
         long_name+='_nairports' + str(len(G.airports))
-    if paras_G['pairs_sec']!=[] and len(G.airports)==2:
+    if 'pairs_sec' in paras_G.keys() and paras_G['pairs_sec']!=[] and len(G.airports)==2:
         long_name+='_direction_' + str(paras_G['pairs_sec'][0][0]) + '_' + str(paras_G['pairs_sec'][0][1])
     long_name+='_cap_' + G.typ_capacities
     
-    if G.typ_capacities!='manual':
+    if not G.typ_capacities in ['manual', 'data']:
         long_name+='_C' + str(paras_G['C'])
     long_name+='_w_' + G.typ_weights
     
@@ -221,200 +222,6 @@ def compute_voronoi(G, xlims=(-1., 1.), ylims=(-1., 1.)):
     G.polygons = polygons
     return G, vor
 
-def extract_capacity_from_traffic(G, flights, date=[2010, 5, 6, 0, 0, 0]):
-    """
-
-    Parameters
-    ----------
-    G: Net object
-    flights: list
-        of flight from the Distance library.
-    date: list, optional
-        ?
-
-    Notes
-    -----
-    New in 3.0.0: taken and adapted from Model 2.
-    (From Model 2)
-    New in 2.9.3: Extract the "capacity", the maximum number of flight per hour, based on the traffic.
-    Changed in 2.9.4: added paras_real.
-    Changed in 2.9.5: fligths are given externally.
-
-    TODO: CHECK THIS "48" in loads dic.
-    TODO: NOT WORKING NOW: the flights from distance library needs to be converted
-    to trajectories of sectors.
-
-    SEE (taken from Net object):
-
-    def extract_capacity_from_traffic(self):
-        "
-        New in 2.9.3: Extract the "capacity", the maximum number of flight per hour, based on the traffic.
-        Changed in 2.9.4: added paras_real.
-        Changed in 2.9.5: fligths are given externally.
-
-        New in 2.6.3: imported and adapted from 2.9 fork. Defines the capacity with the peaks of traffic.
-        "
-        print 'Extracting the capacities from flights_selected...'
-
-        #flights=get_flights(paras_real)
-
-            
-        #loads = {n:[0 for i in range(48)] for n in G.nodes()}
-        loads = {n:[[0,0],[10**8,0]] for n in self.nodes()}
-        for f in self.flights_selected:
-            #print f['sec_path_t']
-            path, times = f['sec_path'], [delay(t) for t in f['sec_path_t']]
-            for i, n in enumerate(path):
-                t1, t2 = times[i],times[i+1]
-                ints = np.array([p[0] for p in loads[n]])
-                caps = np.array([p[1] for p in loads[n]])
-                i1=list(ints>=t1).index(True)
-                i2=list(ints>=t2).index(True)
-                if ints[i2]!=t2:
-                    loads[n].insert(i2,[t2,caps[i2-1]])
-                if ints[i1]!=t1:
-                    loads[n].insert(i1,[t1,caps[i1-1]])
-                    i2+=1
-                for k in range(i1,i2):
-                    loads[n][k][1]+=1
-
-            # hours = {}
-            # r = f['route_m1t']
-            # for i in range(len(r)):
-            #     if G.G_nav.idx_navs.has_key(r[i][0]):
-            #         p1=G.G_nav.idx_navs[r[i][0]]
-            #         if G.G_nav.has_node(p1):
-            #             s1=G.G_nav.node[p1]['sec']
-            #             hours[s1] = hours.get(s1,[]) + [int(float(delay(r[i][1], starting_date = date))/3600.)]
-
-            # for n,v in hours.items():
-            #     hours[n] = list(set(v))
-
-            # for n,v in hours.items():
-            #     for h in v:
-            #         loads[n][h]+=1
-
-        for n,v in loads.items():
-            self.node[n]['capacity'] = max([c[1] for c in v])
-
-    """
-
-    print 'Extracting the capacities from traffic...'
-
-    weights, pop = {}, {}
-    loads = {n:[0 for i in range(48)] for n in G.nodes()}  # why 48? TODO.
-    for f in flights:
-        hours = {}
-        r = f['route_m1t']
-        for i in range(len(r)):
-            if G.G_nav.idx_nodes.has_key(r[i][0]):
-                p1 = G.G_nav.idx_nodes[r[i][0]]
-                if G.G_nav.has_node(p1):
-                    s1 = G.G_nav.node[p1]['sec']
-                    hours[s1] = hours.get(s1,[]) + [int(float(delay(r[i][1], starting_date = date))/3600.)]
-
-        for n,v in hours.items():
-            hours[n] = list(set(v))
-
-        for n,v in hours.items():
-            for h in v:
-                loads[n][h] += 1
-
-    capacities = {}
-    for n,v in loads.items():
-        capacities[n] = max(v)
-    
-    return capacities
-
-def extract_weights_from_traffic(G, flights):
-    """
-    Compute the average times needed for a filght to go from one node to the other.
-    Segments of flights which are not edges of G are not considered.
-
-    Parameters
-    ----------
-    G : Net or NavpointNet object 
-        with matching dictionnary between names and indices of nodes as
-        attribute 'idx_nodes'.
-    flights : list of Flight Object from the Distance library
-        Object needs to have a key 'route_m1t' which is a list of the navpoint label 
-        and times (name, time), with time a tuple (y, m, d, h, m s).
-
-    Returns
-    -------
-    weights : dictionnary
-        keys are tuple (node index, node index) and values are the weights, 
-        i.e. the average time needed to go from one node to the other, in minutes.
-
-    Notes
-    -----
-    Changed in 2.9.4: added paras_real.
-    Changed in 2.9.5: flights are given externally.
-    TODO: use datetime instead of delay. NOT WORKING, NEEDS TO BE 
-    ADAPTED TO MODEL 1. SEE extract_capacity_from_traffic FOR THE ISSUE.
-
-    """
-    print 'Extracting weights from data...'
-
-    #flights=get_flights(paras_real)
-    weights = {}
-    pop = {}
-    for f in flights:
-        r = f['route_m1t']
-        for i in range(len(r)-1):
-            if G.idx_nodes.has_key(r[i][0]) and G.idx_nodes.has_key(r[i+1][0]):
-                p1 = G.idx_nodes[r[i][0]]
-                p2 = G.idx_nodes[r[i+1][0]]
-                if G.has_edge(p1,p2):
-                    weights[(p1,p2)] = weights.get((p1, p2),0.) + delay(np.array(r[i+1][1]),starting_date=np.array(r[i][1]))/60.
-                    pop[(p1,p2)] = pop.get((p1, p2),0.) + 1
-
-    for k in weights.keys():
-        weights[k] = weights[k]/float(pop[k])
-
-    if len(weights.keys())<len(G.edges()):
-        print 'Warning! Some edges do not have a weight!'
-    return weights
-
-def extract_airports_from_traffic(G, flights):
-    """
-    This is a function you can pass to the builder (prepare_network) in 
-    order to infer the airports and pairs from traffic. 
-    You can build your own custom function (for instance to restrict to some pairs).
-    By default, this one extract every possible entry/exit from flights, finding the first node
-    (forward and backward) which are in the list of nodes of the network.
-
-    Notes
-    =====
-    New in 3.1.0
-
-    """
-
-    assert G.type=='sec'
-    entry_exit = []
-    for f in flights[:]:
-        # Find the first node in trajectory which is in the list of nodes of G.
-        idx_entry = 0
-        while idx_entry<len(f['route_m1t']) and not G.idx_nodes[f['route_m1t'][idx_entry][0]] in G.nodes():
-            idx_entry += 1
-        if idx_entry==len(f['route_m1t']): 
-            flights.remove(f)
-            continue
-        
-        # Find the first node in trajectory which is in the list of nodes of G (backwards).
-        idx_exit = -1
-        while abs(idx_exit)<len(f['route_m1t']) and not G.idx_nodes[f['route_m1t'][idx_exit][0]] in G.nodes():
-            idx_exit -= 1
-        if idx_exit==len(f['route_m1t']):
-            flights.remove(f)
-            continue
-
-        entry_exit.append((G.idx_nodes[f['route_m1t'][idx_entry][0]], G.idx_nodes[f['route_m1t'][idx_exit][0]]))
-
-    airports = list(set([e for ee in entry_exit for e in ee]))
-
-    return airports, entry_exit
-
 def give_capacities_and_weights(G, paras_G):
     """
     Gives the capacities and weights (time of travel between nodes)
@@ -423,7 +230,7 @@ def give_capacities_and_weights(G, paras_G):
     Parameters
     ==========
     G: Net object
-    paras_G: dicionnary,
+    paras_G: dictionnary,
         parameters to build the network.
 
     Notes
@@ -433,9 +240,9 @@ def give_capacities_and_weights(G, paras_G):
     """
 
     if paras_G['generate_capacities_from_traffic']:
-        raise Exception("The feature 'generate_capacities_from_traffic' is not implemented yet.")
-        capacities = extract_capacity_from_traffic(G, paras_G['flights_selected'])
+        capacities = extract_capacity_from_traffic(G, paras_G['flights_selected'], fmt_in=paras_G['format_flights'])
         G.fix_capacities(capacities)
+        G.typ_capacities = 'data'
     else:
         if paras_G['capacities']==None:
             G.generate_capacities(typ=paras_G['typ_capacities'], C=paras_G['C'], par=paras_G['suppl_par_capacity'])
@@ -450,24 +257,33 @@ def give_capacities_and_weights(G, paras_G):
             print "This node did not receive any capacity:", n
             raise
 
-    # THIS PIECE HAS TO BE ADAPTED.
-    if paras_G['generate_weights_from_traffic']:
-        raise Exception("The feature 'generate_weights_from_traffic' is not implemented yet.")
-        weights = extract_weights_from_traffic(G.G_nav, paras_G['flights_selected'])
-        G.G_nav.fix_weights(weights, typ='traffic')
-        avg_weight = np.mean([G.G_nav[e[0]][e[1]]['weight'] for e in G.G_nav.edges() if G.G_nav[e[0]][e[1]].has_key('weight')])
-        avg_length = np.mean([dist_flat_kms(np.array(G.G_nav.node[e[0]]['coord'])*60., np.array(G.G_nav.node[e[1]]['coord'])*60.) for e in G.G_nav.edges() if G.G_nav[e[0]][e[1]].has_key('weight')])
-        for e in G.G_nav.edges():
-            if not G.G_nav[e[0]][e[1]].has_key('weight'):
-                #print G.G_nav.node[e[0]]['coord']
-                #raise Exception()
-                length = dist_flat_kms(np.array(G.G_nav.node[e[0]]['coord'])*60., np.array(G.G_nav.node[e[1]]['coord'])*60.)
-                weight = avg_weight*length/avg_length
-                print "This edge did not receive any weight:", e, ", I set it to the average (", weight, "minutes)"
-                G.G_nav[e[0]][e[1]]['weight'] = weight
+    if 'min_capacity' in paras_G.keys() and paras_G['min_capacity']!=None:
+        for n in G.nodes():
+            if G.node[n]['capacity']<paras_G['min_capacity']:
+                G.node[n]['capacity'] = paras_G['min_capacity']
+
+    if paras_G['generate_weights_from_traffic'] and not paras_G['generate_only_average_weight_from_traffic']:
+        weights = extract_weights_from_traffic(G, paras_G['flights_selected'], fmt_in=paras_G['format_flights'])
+        G.fix_weights(weights, typ='traffic')
+        G.typ_weights = 'data'
+        # avg_weight = np.mean([G[e[0]][e[1]]['weight'] for e in G.edges() if G[e[0]][e[1]].has_key('weight')])
+        # avg_length = np.mean([dist_flat_kms(np.array(G.node[e[0]]['coord'])*60., np.array(G.node[e[1]]['coord'])*60.) for e in G.edges() if G[e[0]][e[1]].has_key('weight')])
+        # for e in G.edges():
+        #     if not G[e[0]][e[1]].has_key('weight'):
+        #         #print G.node[e[0]]['coord']
+        #         #raise Exception()
+        #         length = dist_flat_kms(np.array(G.node[e[0]]['coord'])*60., np.array(G.node[e[1]]['coord'])*60.)
+        #         weight = avg_weight*length/avg_length
+        #         print "This edge did not receive any weight:", e, ", I set it to the average (", weight, "minutes)"
+        #         G[e[0]][e[1]]['weight'] = weight
     else:
         if paras_G['weights']==None:
-            G.generate_weights(typ=paras_G['typ_weights'], par=paras_G['par_weights'])
+            if paras_G['generate_weights_from_traffic'] and paras_G['generate_only_average_weight_from_traffic']:
+                weights = extract_weights_from_traffic(G, paras_G['flights_selected'], fmt_in=paras_G['format_flights'])
+                avg_weight = np.mean(weights.values())
+                G.generate_weights(typ='coords', par=avg_weight)
+            else:
+                G.generate_weights(typ=paras_G['typ_weights'], par=paras_G['par_weights'])
         else:
             G.fix_weights(paras_G['weights'], typ='data')
     
@@ -676,15 +492,16 @@ def soft_infrastructure(G, paras_G):
     print "Choosing the airports..."
 
     if paras_G['generate_airports_from_traffic']:
-        airports, entry_exit = extract_airports_from_traffic(G, paras_G['flights_selected'])
+        airports, entry_exit = extract_airports_from_traffic(G, paras_G['flights_selected'], fmt_in=paras_G['format_flights'], min_dis=paras_G['min_dis'])
+        G.add_airports(airports, C_airport=100000)
     else:
         paras_G['pairs_sec'], paras_G['airports_sec'] = reduce_airports_to_existing_nodes(G, paras_G['pairs_sec'], paras_G['airports_sec'])
         if paras_G['airports_sec']!=None:
-            G.add_airports(paras_G['airports_sec'], paras_G['min_dis'], pairs=paras_G['pairs_sec'], C_airport=paras_G['C_airport'])
+            G.add_airports(paras_G['airports_sec'], C_airport=paras_G['C_airport'])
         else:
             # If none of them are specified, draw at random some entry/exits for the navpoint network and
             # infer the sector airports.
-            G.generate_airports(paras_G['nairports_sec'], paras_G['min_dis'], C_airport=100000)
+            G.generate_airports(paras_G['nairports_sec'], C_airport=100000)
 
     print 'Number of airports (sectors) at this point:', len(G.airports)
     print 'Airports at this point:', G.airports
@@ -692,10 +509,10 @@ def soft_infrastructure(G, paras_G):
     ############ Choose available connections ##############
     if paras_G['generate_connections_from_traffic']:
         print 'Getting connections from traffic...'
-        G.set_connections(entry_exit)
+        G.set_connections(entry_exit, min_dis=paras_G['min_dis'])
     else:
         print 'Choosing connection network of type', paras_G['connections'], '...'
-        G.generate_connections(typ=paras_G['connections'], options=paras_G['connections_options'])
+        G.generate_connections(typ=paras_G['connections'], options=paras_G['connections_options'], min_dis=paras_G['min_dis'])
     print 'Number of connections (sectors) at this point:', len(G.connections())
 
     ########## Generate Capacities and weights ###########
@@ -790,7 +607,7 @@ def prepare_network(paras_G, rep=None, save_name=None, show=True):
             pickle.dump(G, f)
         if paras_G['flights_selected']!=None:
             with open(join(rep, save_name + '_flights_selected.pic'),'w') as f:
-                pickle.dump(flights_selected, f)
+                pickle.dump(paras_G['flights_selected'], f)
 
     # Stats
     G.basic_statistics(rep=rep)
@@ -859,4 +676,3 @@ if  __name__=='__main__':
     #rep = join(result_dir, "networks")
     
     G = prepare_network(paras_G, rep=rep, show=True)
-

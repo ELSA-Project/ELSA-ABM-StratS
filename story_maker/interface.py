@@ -153,7 +153,8 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 	def draw_network(self):     
 		draw_sector_map(self.G, 
 						colors=self.normal_color_nodes, 
-						limits=(-1.1, -1.1, 1.1, 1.), 
+						#limits=(-1.1, -1.1, 1.1, 1.), 
+						limits=(0., 0., 0., 0.), 
 						size_nodes=self.size_nodes_normal, 
 						size_edges=0.5, 
 						nodes=self.G.nodes(), 
@@ -166,12 +167,14 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 						size_airports=80,
 						ax=self.axes,
 						coords_in_minutes=False,
-						polygons=False,
+						polygons=True,
+						colors_polygons='unique',
 						airports=True,
 						load=False,
 						numbers=True,
 						#shift_numbers=(0.02, 0.005),
-						shift_numbers=(0.03, 0.015),
+						#shift_numbers=(0.03, 0.015),
+						shift_numbers=(0.1, 0.05),
 						size_numbers=8)
 
 	def draw_trajectory(self, p):
@@ -504,10 +507,10 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 				sat_R[i] = sat_R[i-1]
 				nS[i] = nS[i-1]
 				nR[i] = nR[i-1]
-				if typ==popS:
+				if tuple(typ)==popS:
 					sat_S[i] += sat
 					nS[i] += 1.
-				elif typ==popR:
+				elif tuple(typ)==popR:
 					sat_R[i] += sat
 					nR[i] += 1.
 
@@ -547,8 +550,8 @@ if __name__ == '__main__':
 		print "===================================="
 		seed(see)
 	#paras_file = None if len(sys.argv)==1 else sys.argv[1]
-	paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/tests/my_paras_DiskWorld_test.py'
-	save_rep = jn(result_dir, 'model1/3.1/DiskWorld/stories/big2')
+	paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/tests/my_paras_ECAC_60nodes_test.py'
+	save_rep = jn(result_dir, 'model1/3.1/ECAC_60nodes/stories/test')
 	os.system("mkdir -p " + save_rep)
 	#paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/abm_strategic_model1/my_paras/my_paras_DiskWorld_for_story.py'
 	paras = read_paras(paras_file=paras_file)

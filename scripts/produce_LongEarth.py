@@ -19,8 +19,8 @@ if __name__=='__main__':
 	name_network = 'LongEarth'
 	#rep_results = 'airports_sweep'
 	rep_results = 'consolidated'
-	#suff = '_higher_def'
-	suff = '_bis'
+	suff = ''
+	#suff = '_bis'
 	send_email = True
 
 	paras_G_file = jn(main_dir, 'abm_strategic_model1/my_paras/my_paras_G_iter_' + name_network + suff + '.py')

@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import pickle
 import imp
 
-from libs.general_tools import split_coords, map_of_net, nice_colors, _colors
+from libs.general_tools import split_coords, map_of_net, nice_colors, _colors, delay
 
 version='3.0.0'
 
@@ -193,7 +193,7 @@ def draw_network_map_bis(G, title='Network map', trajectories=[], rep='./',
 
 def draw_sector_map(G, ax=None, save_file=None, fmt='png', load=False, airports=False, \
     polygons=False, show=False, size_airports=30, color_airports=nice_colors[6], \
-    shift_numbers=(0., 0.), numbers=False, size_numbers=10, **kwargs):
+    shift_numbers=(0., 0.), numbers=False, size_numbers=10, colors_polygons='multi', **kwargs):
     if ax==None:
         fig=plt.figure(figsize=(9,6))#*(y_max-y_min)/(x_max-x_min)))#,dpi=600)
         gs = gridspec.GridSpec(1, 2, width_ratios=[6.,1.])
@@ -213,8 +213,11 @@ def draw_sector_map(G, ax=None, save_file=None, fmt='png', load=False, airports=
         scairports = ax.scatter(*zip(*lis), marker='s', zorder=6, s=size_airports, c=color_airports, edgecolor='w')#,s=snf,lw=0,c=[0.,0.45,0.,1])
 
     if polygons:
-        for i, pol in enumerate(G.polygons):
-            patch = PolygonPatch(pol, alpha=0.5, zorder=2, color=_colors[i%len(_colors)])
+        for i, (name, shape) in enumerate(G.polygons.items()):
+            if colors_polygons=='multi':
+                patch = PolygonPatch(shape, alpha=0.5, zorder=2, color=_colors[i%len(_colors)])
+            elif colors_polygons=='unique':
+                patch = PolygonPatch(shape, alpha=0.5, zorder=2, color=nice_colors[0])
             ax.add_patch(patch)
     if numbers:
         for n in G.nodes():
@@ -442,27 +445,18 @@ def post_process_paras(paras):
         for f in flights:
             # _entry = G.G_nav.idx_navs[f['route_m1t'][0][0]]
             # _exit = G.G_nav.idx_navs[f['route_m1t'][-1][0]]
-            if paras['G']!=None: 
-                # # Find the first node in trajectory which is in airports
+            # if paras['format_flights']=='(n, z, t)': 
+                #_entry, _exit = find_entry_exit(paras['G'].G_nav, f, names=True)
+            _entry, _exit = _extract_entry_exit_from_flight(paras['G'], f, fmt_in=paras['format_flights'], min_dis=paras['min_dis'])
+            # else:
                 # idx_entry = 0
-                # while idx_entry<len(f['route_m1t']) and not paras['G'].G_nav.idx_nodes[f['route_m1t'][idx_entry][0]]:# in paras['G'].G_nav.airports:
-                #     idx_entry += 1
-                # if idx_entry==len(f['route_m1t']): idx_entry = 0
-                
-                # # Find the first node in trajectory which is in airports (backwards).
                 # idx_exit = -1
-                # while abs(idx_exit)<len(f['route_m1t']) and not paras['G'].G_nav.idx_nodes[f['route_m1t'][idx_exit][0]]:# in paras['G'].G_nav.airports:
-                #     idx_exit -= 1
-                # if idx_exit==len(f['route_m1t']): idx_exit = -1
-
-                _entry, _exit = find_entry_exit(paras['G'].G_nav, f, names=True)
+                # _entry = f['route_m1t'][idx_entry][0]
+                # _exit = f['route_m1t'][idx_exit][0]
+            if paras['format_flights']=='distance':
+                paras['flows'][(_entry, _exit)] = paras['flows'].get((_entry, _exit),[]) + [f['route_m1t'][0][1]]
             else:
-                idx_entry = 0
-                idx_exit = -1
-                _entry = f['route_m1t'][idx_entry][0]
-                _exit = f['route_m1t'][idx_exit][0]
-
-            paras['flows'][(_entry, _exit)] = paras['flows'].get((_entry, _exit),[]) + [f['route_m1t'][0][1]]
+                paras['flows'][(_entry, _exit)] = paras['flows'].get((_entry, _exit),[]) + [f[0][2]]
 
         if not paras['bootstrap_mode']:
             #paras['departure_times'] = 'exterior'
@@ -605,6 +599,310 @@ def _func_Np(day, width_peak, Delta_t):
     time between the end of a wave and the beginning of the next wave.
     """
     return int(ceil(day/float(width_peak+Delta_t)))
+
+# ============================================================================ #
+
+"""
+Functions to handle traffic.
+"""
+
+def extract_capacity_from_traffic(G, flights, fmt_in='(n, z, t)', date=[2010, 5, 6, 0, 0, 0]):
+    """
+
+    Parameters
+    ----------
+    G: Net object
+    flights: list
+        of flight from the Distance library.
+    date: list, optional
+        ?
+
+    Notes
+    -----
+    New in 3.0.0: taken and adapted from Model 2.
+    (From Model 2)
+    New in 2.9.3: Extract the "capacity", the maximum number of flight per hour, based on the traffic.
+    Changed in 2.9.4: added paras_real.
+    Changed in 2.9.5: fligths are given externally.
+
+    TODO: CHECK THIS "48" in loads dic.
+    TODO: NOT WORKING NOW: the flights from distance library needs to be converted
+    to trajectories of sectors.
+
+    SEE (taken from Net object):
+
+    def extract_capacity_from_traffic(self):
+        "
+        New in 2.9.3: Extract the "capacity", the maximum number of flight per hour, based on the traffic.
+        Changed in 2.9.4: added paras_real.
+        Changed in 2.9.5: fligths are given externally.
+
+        New in 2.6.3: imported and adapted from 2.9 fork. Defines the capacity with the peaks of traffic.
+        "
+        print 'Extracting the capacities from flights_selected...'
+
+        #flights=get_flights(paras_real)
+
+            
+        #loads = {n:[0 for i in range(48)] for n in G.nodes()}
+        loads = {n:[[0,0],[10**8,0]] for n in self.nodes()}
+        for f in self.flights_selected:
+            #print f['sec_path_t']
+            path, times = f['sec_path'], [delay(t) for t in f['sec_path_t']]
+            for i, n in enumerate(path):
+                t1, t2 = times[i],times[i+1]
+                ints = np.array([p[0] for p in loads[n]])
+                caps = np.array([p[1] for p in loads[n]])
+                i1=list(ints>=t1).index(True)
+                i2=list(ints>=t2).index(True)
+                if ints[i2]!=t2:
+                    loads[n].insert(i2,[t2,caps[i2-1]])
+                if ints[i1]!=t1:
+                    loads[n].insert(i1,[t1,caps[i1-1]])
+                    i2+=1
+                for k in range(i1,i2):
+                    loads[n][k][1]+=1
+
+            # hours = {}
+            # r = f['route_m1t']
+            # for i in range(len(r)):
+            #     if G.G_nav.idx_navs.has_key(r[i][0]):
+            #         p1=G.G_nav.idx_navs[r[i][0]]
+            #         if G.G_nav.has_node(p1):
+            #             s1=G.G_nav.node[p1]['sec']
+            #             hours[s1] = hours.get(s1,[]) + [int(float(delay(r[i][1], starting_date = date))/3600.)]
+
+            # for n,v in hours.items():
+            #     hours[n] = list(set(v))
+
+            # for n,v in hours.items():
+            #     for h in v:
+            #         loads[n][h]+=1
+
+        for n,v in loads.items():
+            self.node[n]['capacity'] = max([c[1] for c in v])
+
+    """
+
+    print 'Extracting the capacities from traffic...'
+
+    assert fmt_in in ['(n, z, t)', 'distance']
+
+    weights, pop = {}, {}
+    loads = {n:[0 for i in range(48)] for n in G.nodes()}  # why 48? TODO.
+
+    if fmt_in=='distance':
+        for f in flights:
+            hours = {}
+            r = f['route_m1t']
+            for i in range(len(r)):
+                if G.idx_nodes.has_key(r[i][0]):
+                    s1 = G.idx_nodes[r[i][0]]
+                    if G.has_node(s1):
+                        hours[s1] = hours.get(s1,[]) + [int(float(delay(r[i][1], starting_date = date))/3600.)]
+
+            for n,v in hours.items():
+                hours[n] = list(set(v))
+
+            for n,v in hours.items():
+                for h in v:
+                    loads[n][h] += 1
+
+    else:
+        for traj in flights:
+            hours = {}
+            for n, z, t in traj:
+                if G.idx_nodes.has_key(n):
+                    s1 = G.idx_nodes[n]
+                    if G.has_node(s1):
+                        hours[s1] = hours.get(s1,[]) + [int(float(delay(t, starting_date = date))/3600.)]
+
+            for n,v in hours.items():
+                hours[n] = list(set(v))
+
+            for n,v in hours.items():
+                for h in v:
+                    loads[n][h] += 1
+
+
+    capacities = {}
+    for n,v in loads.items():
+        capacities[n] = max(v)
+    
+    return capacities
+
+def extract_weights_from_traffic(G, flights, fmt_in='(n, z, t)'):
+    """
+    Compute the average times needed for a filght to go from one node to the other.
+    Segments of flights which are not edges of G are not considered.
+
+    Parameters
+    ----------
+    G : Net or NavpointNet object 
+        with matching dictionnary between names and indices of nodes as
+        attribute 'idx_nodes'.
+    flights : list of Flight Object from the Distance library
+        Object needs to have a key 'route_m1t' which is a list of the navpoint label 
+        and times (name, time), with time a tuple (y, m, d, h, m s).
+
+    Returns
+    -------
+    weights : dictionnary
+        keys are tuple (node index, node index) and values are the weights, 
+        i.e. the average time needed to go from one node to the other, in minutes.
+
+    Notes
+    -----
+    Changed in 2.9.4: added paras_real.
+    Changed in 2.9.5: flights are given externally.
+    TODO: use datetime instead of delay. NOT WORKING, NEEDS TO BE 
+    ADAPTED TO MODEL 1. SEE extract_capacity_from_traffic FOR THE ISSUE.
+
+    """
+    print 'Extracting weights from data...'
+
+    assert fmt_in in ['distance', '(n, z, t)']
+
+    #flights=get_flights(paras_real)
+    weights = {}
+    pop = {}
+
+    if fmt_in=='distance':
+        for f in flights:
+            r = f['route_m1t']
+            for i in range(len(r)-1):
+                if G.idx_nodes.has_key(r[i][0]) and G.idx_nodes.has_key(r[i+1][0]):
+                    p1 = G.idx_nodes[r[i][0]]
+                    p2 = G.idx_nodes[r[i+1][0]]
+                    if G.has_edge(p1,p2):
+                        weights[(p1,p2)] = weights.get((p1, p2),0.) + delay(np.array(r[i+1][1]),starting_date=np.array(r[i][1]))/60.
+                        pop[(p1,p2)] = pop.get((p1, p2),0.) + 1
+
+    else:
+        for traj in flights:
+            for i in range(len(traj)-1):
+                n, z, t = traj[i]
+                m, zz, tt = traj[i+1]
+
+                if G.idx_nodes.has_key(n) and G.idx_nodes.has_key(m):
+                    p1 = G.idx_nodes[n]
+                    p2 = G.idx_nodes[m]
+                    if G.has_edge(p1,p2):
+                        weights[(p1,p2)] = weights.get((p1, p2),0.) + delay(np.array(tt), starting_date=np.array(t))/60.
+                        pop[(p1,p2)] = pop.get((p1, p2),0.) + 1
+
+
+    for k in weights.keys():
+        weights[k] = weights[k]/float(pop[k])
+
+    avg_w = np.mean(weights.values())
+    for e in G.edges():
+        if not e in weights.keys():
+            weights[e] = avg_w
+
+    if len(weights.keys())<len(G.edges()):
+        print 'Warning! Some edges do not have a weight!'
+    return weights
+
+def _extract_entry_exit_from_flight(G, f, fmt_in='(n, z, t)', min_dis=2):
+    if fmt_in=='distance':
+        # Find the first node in trajectory which is in the list of nodes of G.
+        idx_entry = 0
+        while idx_entry<len(f['route_m1t']) and not G.idx_nodes[f['route_m1t'][idx_entry][0]] in G.nodes():
+            idx_entry += 1
+        if idx_entry==len(f['route_m1t']): 
+            #flights.remove(f)
+            return None
+        
+        # Find the first node in trajectory which is in the list of nodes of G (backwards).
+        idx_exit = -1
+        while abs(idx_exit)<len(f['route_m1t']) and not G.idx_nodes[f['route_m1t'][idx_exit][0]] in G.nodes():
+            idx_exit -= 1
+        if idx_exit==len(f['route_m1t']):
+            #flights.remove(f)
+            #continue
+            return None
+
+        if len(traj) + idx_exit - idx_entry - 1 < min_dis:
+            # flights.remove(traj)
+            # continue
+            return None
+
+        entry_exit = (G.idx_nodes[f['route_m1t'][idx_entry][0]], G.idx_nodes[f['route_m1t'][idx_exit][0]])
+    else:
+        traj = f
+        idx_entry = 0
+        while idx_entry<len(traj) and not G.idx_nodes[traj[idx_entry][0]] in G.nodes():
+            idx_entry += 1
+        if idx_entry==len(traj): 
+            # flights.remove(traj)
+            # continue
+            return None
+        
+        # Find the first node in trajectory which is in the list of nodes of G (backwards).
+        idx_exit = -1
+        while abs(idx_exit)<len(traj) and not G.idx_nodes[traj[idx_exit][0]] in G.nodes():
+            idx_exit -= 1
+        if idx_exit==len(traj):
+            # flights.remove(traj)
+            # continue
+            return None
+
+        if len(traj) + idx_exit - idx_entry - 1 < min_dis:
+            # flights.remove(traj)
+            # continue
+            return None
+
+        entry_exit = (G.idx_nodes[traj[idx_entry][0]], G.idx_nodes[traj[idx_exit][0]])
+
+    return entry_exit
+
+def extract_entry_exits_from_traffic(G, flights, fmt_in='(n, z, t)', min_dis=2):
+    """
+    This is a function you can pass to the builder (prepare_network) in 
+    order to infer the airports and pairs from traffic. 
+    You can build your own custom function (for instance to restrict to some pairs).
+    By default, this one extract every possible entry/exit from flights, finding the first node
+    (forward and backward) which are in the list of nodes of the network.
+
+    Notes
+    =====
+    New in 3.1.0
+
+    """
+
+    assert G.type=='sec'
+    assert fmt_in in ['distance', '(n, z, t)']
+    entry_exit = []
+
+    for f in flights[:]:
+        ee = _extract_entry_exit_from_flight(G, f, fmt_in=fmt_in, min_dis=min_dis)
+        if ee!=None:
+            entry_exit.append(ee)
+        else:
+            flights.remove(f)
+
+    return entry_exit
+
+def extract_airports_from_traffic(G, flights, fmt_in='(n, z, t)', min_dis=2):
+    """
+    This is a function you can pass to the builder (prepare_network) in 
+    order to infer the airports and pairs from traffic. 
+    You can build your own custom function (for instance to restrict to some pairs).
+    By default, this one extract every possible entry/exit from flights, finding the first node
+    (forward and backward) which are in the list of nodes of the network.
+
+    Notes
+    =====
+    New in 3.1.0
+
+    """
+
+    entry_exit = extract_entry_exits_from_traffic(G, flights, fmt_in=fmt_in, min_dis=min_dis)
+
+    airports = list(set([e for ee in entry_exit for e in ee]))
+
+    return airports, entry_exit
 
 # ============================================================================ #
 

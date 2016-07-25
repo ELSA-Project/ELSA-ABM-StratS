@@ -291,7 +291,7 @@ def iter_sim(paras, save=1, do=do_standard, build_pat=build_path_average, rep=re
         
     loop({p:paras[p + '_iter'] for p in paras['paras_to_loop']}, paras['paras_to_loop'], \
         paras, tot_lvl=len(paras['paras_to_loop']), thing_to_do=average_sim, paras=paras, \
-        G=G, do=do, build_pat=build_pat, save=save, rep=rep)
+        G=G, do=do, build_pat=build_pat, save=save, rep=rep, show_detailed_evo=True)
 
 def change_airports((G, paras_G), change_name_G=True):
     """

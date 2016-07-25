@@ -6,7 +6,7 @@ from os.path import join as jn
 
 import networkx as nx
 #from random import getstate, setstate, 
-from random import shuffle, uniform,  sample, seed
+from numpy.random import shuffle, uniform, choice, seed
 import pickle
 from string import split
 import matplotlib.pyplot as plt
@@ -69,7 +69,7 @@ class Simulation(object):
 		for k in ['AC', 'Nfp', 'na', 'tau', 'departure_times', 'ACtot', 'N_shocks','Np', \
 			'ACsperwave','Delta_t', 'width_peak', 'old_style_allocation', 'flows', 'nA', \
 			'day', 'noise', 'STS', 'starting_date', 'bootstrap_mode', 'bootstrap_only_time',\
-			'discard_first_and_last_node']:
+			'discard_first_and_last_node', 'flows_index_based']:
 			if k in paras.keys():
 				setattr(self, k, paras[k])
 	
@@ -245,13 +245,17 @@ class Simulation(object):
 			if self.bootstrap_only_time:
 				# resampling times keeping number of flights constant per each entry/exit (scaling them up)
 				tot_AC = len(all_times)
-				flows = {(entry, exit):sample(all_times, int(len(times)*self.ACtot/float(tot_AC))) for (entry, exit), times in self.flows.items()}
+				flows = {(entry, exit):choice(all_times, int(len(times)*self.ACtot/float(tot_AC))) for (entry, exit), times in self.flows.items()}
 			else:
 				# resampling the pairs of entry/exit
-				new_pairs = np.array(sample(self.flows.keys(), self.ACtot))
+				#print self.flows.keys()
+				ees = self.flows.keys()
+				idx_new_pairs = choice(len(ees), self.ACtot)
+				#new_pairs = np.array(choice(list(self.flows.keys()), self.ACtot))
+				new_pairs = np.array(ees)[idx_new_pairs]
 				flows = {}
 				for pair in new_pairs:
-					flows[pair] = flows.get(pair, []) + [choice(all_times)]
+					flows[tuple(pair)] = flows.get(tuple(pair), []) + [all_times[choice(len(all_times), 1)]]
 		
 		all_times = [delay(time) for time in all_times]
 		# Guess the starting date.
@@ -260,23 +264,30 @@ class Simulation(object):
 		k=0
 
 		for ((source, destination), times) in flows.items():
-			idx_s = self.G.idx_nodes[source]
-			idx_d = self.G.idx_nodes[destination]
-			if idx_s in self.G.get_airports() and idx_d in self.G.get_airports() and self.G.short.has_key((idx_s, idx_d)):    
+			if not self.flows_index_based:
+				idx_s = self.G.idx_nodes[source]
+				idx_d = self.G.idx_nodes[destination]
+			else:
+				idx_s = source
+				idx_d = destination
+			if idx_s in self.G.get_airports() and idx_d in self.G.get_airports() and (idx_s, idx_d) in self.G.connections():    
 				# For each OD, put nA fraction of the flights as company A and 1-nA as company B
 				n_flights_tot = len(times)
-				n_flights_A = int(self.nA*n_flights_tot)
-				n_flights_B = n_flights_tot - int(self.nA*n_flights_tot)
-				AC = [n_flights_A, n_flights_B]
+				# n_flights_A = int(self.nA*n_flights_tot)
+				# n_flights_B = n_flights_tot - int(self.nA*n_flights_tot)
+				# AC = [n_flights_A, n_flights_B]
 				l = 0
-				for i, par in enumerate(self.pars):
-					for j in range(AC[i]):
-						time = times[l]
-						self.ACs[k] = AirCompany(k, self.Nfp, self.na, self.G.short.keys(), par)
-						time = delay(time, starting_date=self.starting_date)/60.
-						self.ACs[k].fill_FPs([time], self.tau, self.G, pairs=[(idx_s, idx_d)])
-						k+=1
-						l+=1
+				#for i, par in enumerate(self.pars):
+				#	for j in range(AC[i]):
+				for i in range(n_flights_tot):
+					time = times[l]
+					par = np.array(self.pars)[choice(range(len(self.pars)), size=1, p=[self.nA, 1.-self.nA])][0]
+					#print 'par=', par
+					self.ACs[k] = AirCompany(k, self.Nfp, self.na, self.G.connections(), par)
+					time = delay(time, starting_date=self.starting_date)/60.
+					self.ACs[k].fill_FPs([time], self.tau, self.G, pairs=[(idx_s, idx_d)])
+					k+=1
+					l+=1
 			else:
 				if self.verb:
 					print ("I do " + (not idx_s in self.G.get_airports())*'not', "find", idx_s, ", I do " + (not idx_d in self.G.get_airports())*'not', "find", idx_d,\
@@ -490,7 +501,7 @@ def build_path(paras, vers=main_version, in_title=['Nfp', 'tau', 'par', 'ACtot',
 	
 	in_title = list(np.unique(in_title))
 		
-	if paras['departure_times']!='zeros':
+	if paras['departure_times'] not in ['zeros', 'from_data']:
 		try:
 			in_title.remove('ACtot')
 		except ValueError:
