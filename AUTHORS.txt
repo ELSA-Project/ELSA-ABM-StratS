@@ -1,0 +1,6 @@
+Authors ordered by first contribution:
+
+Gérald Gurtner <gurtner.gerald@gmail.com>
+
+Indirect Contributors:
+Christian Bongiorno, Rosario Mantegna, Salvatore Miccichè, Fabrizio Lillo, Luca Valori, Simone Pozzi, Marco Ducci.
