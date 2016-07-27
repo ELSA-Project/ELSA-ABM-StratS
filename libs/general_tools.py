@@ -992,7 +992,7 @@ def move_legend(leg, xOffset):
     return leg
 
 def _pre_compute_positions(G, colors='r', limits=(0,0,0,0), size_nodes=1., size_edges=2., nodes=[], edges=True, 
-    key_word_weight='weight', z_order_nodes=6, diff_edges=False, coords_in_minutes=True):
+    key_word_weight='weight', z_order_nodes=6, diff_edges=False, coords_in_minutes=True, enlarge_limits=0.):
     
     """
     Used for plotting different maps.
@@ -1011,10 +1011,10 @@ def _pre_compute_positions(G, colors='r', limits=(0,0,0,0), size_nodes=1., size_
     if nodes == []:
         nodes = G.nodes()
     if limits==(0,0,0,0):
-        limits = (min([G.node[n]['coord'][0]/unit for n in nodes]) - 0.2,
-                min([G.node[n]['coord'][1]/unit for n in nodes]) - 0.2,
-                max([G.node[n]['coord'][0]/unit for n in nodes]) + 0.2,
-                max([G.node[n]['coord'][1]/unit for n in nodes]) + 0.2)
+        limits = (min([G.node[n]['coord'][0]/unit for n in nodes]) - enlarge_limits,
+                min([G.node[n]['coord'][1]/unit for n in nodes]) - enlarge_limits,
+                max([G.node[n]['coord'][0]/unit for n in nodes]) + enlarge_limits,
+                max([G.node[n]['coord'][1]/unit for n in nodes]) + enlarge_limits)
         restrict_nodes = False
 
     if nodes==[]:
@@ -1069,10 +1069,27 @@ def _pre_compute_positions(G, colors='r', limits=(0,0,0,0), size_nodes=1., size_
 
 def map_of_net(G, colors='r', limits=(0,0,0,0), title='', size_nodes=1., size_edges=2., nodes=[], zone_geo=[], edges=True, fmt='svg', dpi=100, \
     save_file=None, show=True, figsize=(9,6), background_color='white', key_word_weight=None, z_order_nodes=6, diff_edges=False, lw_map=0.8,\
-    draw_mer_par=True, ax=None, coords_in_minutes=True, use_basemap=False, split_nodes_by=0.):
+    draw_mer_par=True, ax=None, coords_in_minutes=True, use_basemap=False, split_nodes_by=0., enlarge_limits=0.):
     
-    nodes, (x_min, y_min, x_max, y_max), colors, z_order_nodes, size_nodes, edges_positions, edge_width, edges_colors = _pre_compute_positions(G, colors=colors, limits=limits, size_nodes=size_nodes, nodes=nodes, edges=edges, 
-    key_word_weight=key_word_weight, z_order_nodes=z_order_nodes, diff_edges=diff_edges, coords_in_minutes=coords_in_minutes, size_edges=size_edges)
+    nodes, \
+    (x_min, y_min, x_max, y_max), \
+    colors, \
+    z_order_nodes, \
+    size_nodes, \
+    edges_positions, \
+    edge_width, \
+    edges_colors = _pre_compute_positions(G, 
+                                        colors=colors, 
+                                        limits=limits, 
+                                        size_nodes=size_nodes, 
+                                        nodes=nodes, 
+                                        edges=edges, 
+                                        key_word_weight=key_word_weight, 
+                                        z_order_nodes=z_order_nodes, 
+                                        diff_edges=diff_edges, 
+                                        coords_in_minutes=coords_in_minutes, 
+                                        size_edges=size_edges,
+                                        enlarge_limits=enlarge_limits)
 
     #x_min, y_min, x_max, y_max = limits
     if ax==None:

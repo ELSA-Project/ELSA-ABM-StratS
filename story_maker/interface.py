@@ -155,6 +155,7 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 						colors=self.normal_color_nodes, 
 						#limits=(-1.1, -1.1, 1.1, 1.), 
 						limits=(0., 0., 0., 0.), 
+						enlarge_limits=1.5,
 						size_nodes=self.size_nodes_normal, 
 						size_edges=0.5, 
 						nodes=self.G.nodes(), 
@@ -388,6 +389,7 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 		self.satisfactionSlider.setSliderPosition(1)
 		self.fig_sat.savefig(jn(self.rep_res, 'diff_sats_step' + str(it) +  '.png'))
 		self.fig_dt.savefig(jn(self.rep_res, 'departure_times_step' + str(it) +  '.png'))
+		self.fig.savefig(jn(self.rep_res, 'map_step' + str(it) +  '.png'), dpi=300)
 
 		# Put the satisfaction slider back in initial position
 		self.satisfactionSlider.setSliderPosition(pos_init)
