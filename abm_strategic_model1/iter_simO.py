@@ -158,9 +158,9 @@ def average_sim2(paras=None, G=None, save=1, do=do_standard, build_pat=build_pat
     force=paras['force'], parallel=paras['parallel'], n_iter=paras['n_iter'])
 
 def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path_average, rep=result_dir,\
-    aggregator=aggregate_results, verbose=True):
+    aggregator=aggregate_results, verbose=True, max_parallel_computation=100):
     """
-    Average some simulations which have the same 
+    Average some simulations which have the same paras.
     
     Notes
     -----
@@ -175,13 +175,20 @@ def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path
     
     """
     rep = build_pat(paras, Gname=G.name, rep=rep)
-    if paras['force'] or not os.path.exists(rep):  
+    if paras['force'] or not os.path.exists(rep): 
         inputs = [(paras, G) for i in range(paras['n_iter'])]
         start_time = time()
         if paras['parallel']:
             if verbose:
                 print 'Doing', len(inputs), 'iterations in parallel...',
-            results_list = parmap(do, inputs)
+            if len(inputs)<=max_parallel_computation:
+                results_list = parmap(do, inputs)
+            else:
+                print '(with splitted lists)...',
+                splitlists = [inputs[i:i+max_parallel_computation] for i in range(0, len(inputs), max_parallel_computation)]
+                results_list = []
+                for inpt in splitlists:
+                    results_list += parmap(do, inpt)
         else:
             if verbose:
                 print 'Doing', len(inputs), 'iterations sequentially...',
@@ -194,7 +201,6 @@ def average_sim(paras=None, G=None, save=1, do=do_standard, build_pat=build_path
         if verbose:
             print ' done in', time()-start_time, 's'
             print
-        
         results = aggregator(results_list)
                     
         if save>0:

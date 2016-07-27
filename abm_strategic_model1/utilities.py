@@ -194,6 +194,9 @@ def draw_network_map_bis(G, title='Network map', trajectories=[], rep='./',
 def draw_sector_map(G, ax=None, save_file=None, fmt='png', load=False, airports=False, \
     polygons=False, show=False, size_airports=30, color_airports=nice_colors[6], \
     shift_numbers=(0., 0.), numbers=False, size_numbers=10, colors_polygons='multi', **kwargs):
+    """
+    Used in particular by the interface.
+    """
     if ax==None:
         fig=plt.figure(figsize=(9,6))#*(y_max-y_min)/(x_max-x_min)))#,dpi=600)
         gs = gridspec.GridSpec(1, 2, width_ratios=[6.,1.])
