@@ -12,6 +12,7 @@ More information about the ELSA project and its results can be found here:
 
 A more complete model, based on navpoint trajectories and with a tactical part, can be found [here](https://github.com/ELSA-Project/ELSA-ABM). This version is sector-based and is aiming at providing a toy-model to study the main mechanisms of the flight plan allocation.
 
+![GUI](GUI_model.png "GUI")
 
 # Getting started
 
