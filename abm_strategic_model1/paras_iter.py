@@ -75,7 +75,7 @@ n_iter = 100 # Number of iterations for each set of parameters.
 # put an empty list if you just want to have several iterations 
 # of a single set of parameters.
 
-paras_to_loop = ['density']
+paras_to_loop = ['nA, density']
 
 
 if paras_to_loop==['nA'] and par!=tuple([tuple([float(_v) for _v in _p])  for _p in [[1.,0.,0.001], [1.,0.,1000.]]]) :

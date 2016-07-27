@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+"""
+Simple GUI for single runs of the model.
+
+Run like this (for instance for the example):
+
+python interface.py ../tests/example/my_paras_example.py ../tests/example/results_example
+	
+"""
+
 import sys
 sys.path.insert(1, '..')
 sys.path.insert(1, '../abm_strategic_model1')
@@ -23,7 +32,7 @@ from matplotlib.figure import Figure
 from libs.general_tools import nice_colors
 from abm_strategic_model1.utilities import draw_sector_map, read_paras
 from abm_strategic_model1.simulationO import Simulation
-from libs.paths import result_dir
+from libs.paths import result_dir, main_dir
 
 import design
 
@@ -155,7 +164,7 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 						colors=self.normal_color_nodes, 
 						#limits=(-1.1, -1.1, 1.1, 1.), 
 						limits=(0., 0., 0., 0.), 
-						enlarge_limits=1.5,
+						enlarge_limits=0.2,
 						size_nodes=self.size_nodes_normal, 
 						size_edges=0.5, 
 						nodes=self.G.nodes(), 
@@ -535,7 +544,6 @@ class StrategicGUI(QMainWindow, design.Ui_StrategicLayer):
 			
 			self.canvas_sat.draw()
 
-
 def main(paras, **kwargs):
 	app = QApplication(sys.argv)
 	form = StrategicGUI(**kwargs)
@@ -551,16 +559,35 @@ if __name__ == '__main__':
 		print "USING SEED", see
 		print "===================================="
 		seed(see)
-	#paras_file = None if len(sys.argv)==1 else sys.argv[1]
-	paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/tests/my_paras_ECAC_60nodes_test.py'
-	save_rep = jn(result_dir, 'model1/3.1/ECAC_60nodes/stories/test')
-	os.system("mkdir -p " + save_rep)
-	#paras_file = '/home/earendil/Documents/ELSA/ABM/Old_strategic/Model1/abm_strategic_model1/my_paras/my_paras_DiskWorld_for_story.py'
+
+
+	if len(sys.argv)==1:
+		# Full manual
+		#paras_file = '../tests/example/my_paras_example.py'
+		paras_file = '../tests/my_paras_DiskWorld_test.py'
+		#rep = join(result_dir, 'networks')
+		save_rep = jn(result_dir, 'model1/3.1/ECAC_60nodes/stories/test')
+	elif len(sys.argv)==2:
+		paras_file = sys.argv[1]
+		save_rep = jn(result_dir, 'model1/3.1/ECAC_60nodes/stories/test')
+	elif len(sys.argv)==3:
+		paras_file = sys.argv[1]
+		save_rep = sys.argv[2]
+	else:
+		raise Exception("You should put 0, 1 or 2 arguments.")
+
 	paras = read_paras(paras_file=paras_file)
 	
-	history_save_file = "test.pic"
+	os.system("mkdir -p " + save_rep)
 	
-	#history_load_file = '../tests/history_test.pic'
+	# Use this to save the history
+	history_save_file = "story.pic"
+
+	# Use this to load the history	
 	history_load_file = None
 	#history_load_file = jn(save_rep, "history_big2.pic")
-	main(paras, keep_history=True, save_file=history_save_file, load_file=history_load_file, rep_res=save_rep)
+
+	main(paras, keep_history=True,
+				save_file=history_save_file,
+				load_file=history_load_file,
+				rep_res=save_rep)

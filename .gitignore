@@ -22,6 +22,8 @@ doc/*.aux
 doc/*.html
 tests/*.pyc
 tests/*.pic
+tests/example/results_example
+*.pyc
 story_maker/*.pyc
 story_maker/test*.ui
 *.orig

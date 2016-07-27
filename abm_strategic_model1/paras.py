@@ -2,7 +2,6 @@
 """
 Template for parameter file for the a single simulation. The Paras object in output should
 be always processed by post_process_paras in utilities file.
-TODO: fix parallel computation.
 """
 
 import pickle as _pickle
